@@ -1,0 +1,139 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { APP_NAME, APP_TAGLINE } from "../config";
+---
+
+<Layout title="Home">
+  <main class="max-w-4xl mx-auto p-6" id="app">
+    <div id="loading" class="text-center py-20">
+      <p class="text-gray-500">Loading...</p>
+    </div>
+    <div id="login" class="hidden max-w-sm mx-auto py-20">
+      <h1 class="text-3xl font-bold mb-2 text-center text-emerald-400">{APP_NAME}</h1>
+      <p class="text-center text-gray-500 mb-8 text-sm">{APP_TAGLINE}</p>
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label for="email" class="block text-sm font-medium mb-1 text-gray-300">Email</label>
+          <input type="email" id="email" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium mb-1 text-gray-300">Password</label>
+          <input type="password" id="password" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+        </div>
+        <p id="login-error" class="text-red-400 text-sm hidden"></p>
+        <button type="submit"
+          class="w-full bg-emerald-600 text-white rounded-lg px-4 py-2.5 font-medium hover:bg-emerald-500 transition-colors">
+          Sign In
+        </button>
+      </form>
+      <a href="/forgot-password" class="block text-center text-sm text-gray-500 mt-4 hover:text-gray-300 transition-colors">
+        Forgot password?
+      </a>
+    </div>
+    <div id="dashboard" class="hidden">
+      <header class="flex items-center justify-between mb-8">
+        <div>
+          <h1 class="text-2xl font-bold text-emerald-400">{APP_NAME}</h1>
+          <p class="text-sm text-gray-500">{APP_TAGLINE}</p>
+        </div>
+        <button id="logout-btn" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">Sign Out</button>
+      </header>
+      <div id="accounts-grid" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { auth, db } from "../lib/firebase";
+    import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+    import { collection, getDocs, query, orderBy } from "firebase/firestore";
+
+    const loadingEl = document.getElementById("loading")!;
+    const loginEl = document.getElementById("login")!;
+    const dashboardEl = document.getElementById("dashboard")!;
+    const loginForm = document.getElementById("login-form") as HTMLFormElement;
+    const loginError = document.getElementById("login-error")!;
+    const logoutBtn = document.getElementById("logout-btn")!;
+    const accountsGrid = document.getElementById("accounts-grid")!;
+
+    function show(el: HTMLElement) { el.classList.remove("hidden"); }
+    function hide(el: HTMLElement) { el.classList.add("hidden"); }
+
+    onAuthStateChanged(auth, async (user) => {
+      hide(loadingEl);
+      if (user) {
+        hide(loginEl);
+        show(dashboardEl);
+        await loadDashboard();
+      } else {
+        show(loginEl);
+        hide(dashboardEl);
+      }
+    });
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hide(loginError);
+      const email = (document.getElementById("email") as HTMLInputElement).value;
+      const password = (document.getElementById("password") as HTMLInputElement).value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (err: any) {
+        loginError.textContent = err.message;
+        show(loginError);
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => signOut(auth));
+
+    function fmtMoney(n: number): string {
+      const abs = Math.abs(n);
+      const [whole, dec] = abs.toFixed(2).split(".");
+      const commaWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const prefix = n < 0 ? "-" : "";
+      return `${prefix}$${commaWhole}<span class="text-[0.7em] align-top">.${dec}</span>`;
+    }
+
+    async function loadDashboard() {
+      const snap = await getDocs(query(collection(db, "accounts"), orderBy("order")));
+      accountsGrid.innerHTML = "";
+
+      if (snap.empty) {
+        accountsGrid.innerHTML = '<p class="text-gray-500 col-span-full">No accounts found.</p>';
+        return;
+      }
+
+      snap.forEach((doc) => {
+        const data = doc.data();
+        const card = document.createElement("a");
+        card.href = `/account?id=${doc.id}`;
+        card.className = "block bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-600 transition-colors";
+        const balance = (data.currentBalance ?? 0);
+        const balanceColor = balance < 0 ? 'text-red-400' : 'text-emerald-400';
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold text-lg text-gray-100">${data.name}</h2>
+          </div>
+          <p class="text-3xl font-bold tabular-nums ${balanceColor} mb-3">${fmtMoney(balance)}</p>
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <div>
+              <p class="text-gray-500">Interest</p>
+              <p class="text-gray-300 tabular-nums">${fmtMoney(data.totalInterest ?? 0)}</p>
+            </div>
+            <div>
+              <p class="text-gray-500">Deposits</p>
+              <p class="text-gray-300 tabular-nums">${fmtMoney(data.totalDeposits ?? 0)}</p>
+            </div>
+            <div>
+              <p class="text-gray-500">Fines</p>
+              <p class="text-red-400 tabular-nums">${fmtMoney(data.totalFines ?? 0)}</p>
+            </div>
+          </div>
+        `;
+        accountsGrid.appendChild(card);
+      });
+    }
+  </script>
+</Layout>
