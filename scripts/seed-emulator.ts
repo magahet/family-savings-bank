@@ -9,6 +9,21 @@ initializeApp({ projectId: process.env.GCLOUD_PROJECT || "demo-savings-bank" });
 const db = getFirestore();
 const auth = getAuth();
 
+// Wait for the emulators to accept connections (they can take 10-20s to start).
+async function waitForEmulator(url: string, name: string, tries = 60) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      await fetch(url);
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  throw new Error(`${name} emulator not reachable at ${url} after ${tries}s`);
+}
+await waitForEmulator("http://localhost:8080/", "Firestore");
+await waitForEmulator("http://localhost:9099/", "Auth");
+
 // Create test admin user
 try {
   await auth.createUser({ uid: "test-admin", email: "test@test.com", password: "test1234" });
@@ -29,10 +44,11 @@ const kids = [
   { id: "cora", name: "Cora", balance: 365.71 },
 ];
 
-for (const kid of kids) {
+for (const [i, kid] of kids.entries()) {
   const ref = db.collection("accounts").doc(kid.id);
   await ref.set({
     name: kid.name,
+    order: i, // dashboard sort order; the dashboard query orderBy("order") skips docs without it
     rateOverride: null,
     currentBalance: kid.balance,
     totalInterest: 100,

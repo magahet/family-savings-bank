@@ -1,13 +1,13 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
-// Copy this file to src/lib/firebase.ts and paste your project's web config.
-// Firebase Console -> Project settings -> General -> Your apps -> SDK setup.
-// These values are safe to expose in client code (access is controlled by
-// Firebase Auth + Firestore security rules), but keeping the real file
-// gitignored keeps the public template project-agnostic.
-const firebaseConfig = {
+// Copy this file to src/lib/firebase.ts and paste your project's web config
+// into `prodConfig` below (Firebase Console -> Project settings -> General ->
+// Your apps -> SDK setup). These values are safe to expose in client code
+// (access is controlled by Firebase Auth + Firestore security rules); keeping
+// the real file gitignored just keeps the public template project-agnostic.
+const prodConfig = {
   apiKey: "YOUR_API_KEY",
   authDomain: "your-project-id.firebaseapp.com",
   projectId: "your-project-id",
@@ -16,6 +16,16 @@ const firebaseConfig = {
   appId: "YOUR_APP_ID",
 };
 
-const app = initializeApp(firebaseConfig);
+// During local development (`npm run dev` / `npm run dev:full`) the app talks to
+// the local Firebase Emulators using a throwaway demo project, so no cloud
+// account or real credentials are needed. Production builds use prodConfig.
+const app = initializeApp(
+  import.meta.env.DEV ? { apiKey: "demo", projectId: "demo-savings-bank" } : prodConfig
+);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+if (import.meta.env.DEV) {
+  connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "localhost", 8080);
+}

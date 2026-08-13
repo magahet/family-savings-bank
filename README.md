@@ -4,6 +4,12 @@ A self-hosted family savings tracker. Each child gets an account with deposits, 
 
 Built on Firebase (Firestore + Auth + Cloud Functions + Hosting) with an Astro + Tailwind frontend. Deploy your own instance; nothing is tied to a specific family or project.
 
+## Screenshots
+
+| Dashboard | Account ledger |
+|-----------|----------------|
+| [![Dashboard — all accounts with balances](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) | [![Account ledger — transactions, monthly interest, and totals](docs/screenshots/account-ledger.png)](docs/screenshots/account-ledger.png) |
+
 ## Features
 
 - **Per-child ledgers** with a running balance and lifetime totals (deposits, withdrawals, fines, interest).

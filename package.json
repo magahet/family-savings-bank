@@ -8,9 +8,9 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "emulators": "firebase emulators:start",
+    "emulators": "firebase emulators:start --project demo-savings-bank",
     "seed": "npx tsx scripts/seed-emulator.ts",
-    "dev:full": "firebase emulators:start &  sleep 3 && npx tsx scripts/seed-emulator.ts && astro dev",
+    "dev:full": "firebase emulators:start --project demo-savings-bank --only auth,firestore & GCLOUD_PROJECT=demo-savings-bank npm run seed && astro dev",
     "build": "astro build",
     "preview": "astro preview",
     "deploy": "npm run build && firebase deploy"
