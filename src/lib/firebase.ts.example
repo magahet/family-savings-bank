@@ -1,0 +1,21 @@
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+
+// Copy this file to src/lib/firebase.ts and paste your project's web config.
+// Firebase Console -> Project settings -> General -> Your apps -> SDK setup.
+// These values are safe to expose in client code (access is controlled by
+// Firebase Auth + Firestore security rules), but keeping the real file
+// gitignored keeps the public template project-agnostic.
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "your-project-id.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project-id.firebasestorage.app",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
+};
+
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);

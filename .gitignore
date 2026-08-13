@@ -1,0 +1,25 @@
+# dependencies & build output
+node_modules/
+dist/
+functions/lib/
+.astro/
+
+# environment
+.env
+.env.local
+
+# firebase local
+.firebase/
+firestore-debug.log
+firebase-debug.log
+
+# instance-specific config (keep the *.example versions tracked)
+.firebaserc
+src/lib/firebase.ts
+.api-url
+.test-creds
+
+# local-only / instance-specific scripts and data (never published)
+scripts/local/
+data/
+*.xlsx

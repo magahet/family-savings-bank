@@ -1,0 +1,769 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Account">
+  <main class="max-w-5xl mx-auto p-6">
+    <div id="loading" class="text-center py-20">
+      <p class="text-gray-500">Loading...</p>
+    </div>
+    <div id="account-view" class="hidden">
+      <header class="flex items-center justify-between mb-6">
+        <div>
+          <a href="/" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">&larr; All Accounts</a>
+          <h1 id="account-name" class="text-2xl font-bold mt-1 text-gray-100"></h1>
+        </div>
+        <div class="text-right">
+          <p id="account-balance" class="text-3xl font-bold"></p>
+          <p id="stale-warning" class="text-yellow-500 text-xs hidden">Balance may be updating...</p>
+        </div>
+      </header>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+          <p class="text-xs text-gray-500 mb-1">Interest Earned</p>
+          <p id="stat-interest" class="font-semibold text-emerald-400"></p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+          <p class="text-xs text-gray-500 mb-1">Total Deposits</p>
+          <p id="stat-deposits" class="font-semibold text-gray-200"></p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+          <p class="text-xs text-gray-500 mb-1">Total Fines</p>
+          <p id="stat-fines" class="font-semibold text-red-400"></p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+          <p class="text-xs text-gray-500 mb-1">Next Interest</p>
+          <p id="stat-next-interest" class="font-semibold text-blue-400"></p>
+          <p id="stat-rate" class="text-xs text-gray-600"></p>
+        </div>
+      </div>
+
+      <div id="filters" class="flex flex-wrap gap-3 mb-6 items-center">
+        <input type="text" id="search-input" placeholder="Search memos..."
+          class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 w-48" />
+        <select id="filter-type"
+          class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100">
+          <option value="">All types</option>
+          <option value="deposit">Deposits</option>
+          <option value="withdrawal">Withdrawals</option>
+          <option value="fine">Fines</option>
+        </select>
+        <input type="date" id="filter-from" title="From date"
+          class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100" />
+        <span class="text-gray-600 text-xs">to</span>
+        <input type="date" id="filter-to" title="To date"
+          class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100" />
+        <button id="filter-clear" class="text-xs text-gray-500 hover:text-gray-300 transition-colors hidden">Clear</button>
+      </div>
+
+      <div id="add-transaction-section" class="mb-6 hidden">
+        <button id="toggle-form-btn" class="text-sm bg-emerald-600 text-white rounded-lg px-4 py-2 hover:bg-emerald-500 transition-colors">
+          + Add Transaction
+        </button>
+        <form id="transaction-form" class="hidden mt-4 bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium mb-1 text-gray-400">Type</label>
+              <select id="tx-type" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-100">
+                <option value="deposit">Deposit</option>
+                <option value="withdrawal">Withdrawal</option>
+                <option value="fine">Fine</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium mb-1 text-gray-400">Amount</label>
+              <input type="number" id="tx-amount" step="0.01" min="0.01" required
+                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-100" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1 text-gray-400">Memo</label>
+            <input type="text" id="tx-memo"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-100" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1 text-gray-400">Date</label>
+            <input type="date" id="tx-date" required
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-100" />
+          </div>
+          <div class="flex gap-2">
+            <button type="submit" class="bg-emerald-600 text-white rounded-lg px-4 py-1.5 text-sm hover:bg-emerald-500 transition-colors">
+              Save
+            </button>
+            <button type="button" id="cancel-form-btn" class="border border-gray-700 text-gray-300 rounded-lg px-4 py-1.5 text-sm hover:bg-gray-800 transition-colors">
+              Cancel
+            </button>
+          </div>
+          <input type="hidden" id="tx-edit-id" value="" />
+        </form>
+      </div>
+
+      <div id="transactions-list" class="overflow-x-auto">
+      </div>
+      <div id="pagination" class="hidden flex items-center justify-between mt-4">
+        <button id="prev-btn" class="text-sm border border-gray-700 text-gray-300 rounded-lg px-4 py-1.5 hover:bg-gray-800 disabled:opacity-30 transition-colors" disabled>
+          &larr; Newer
+        </button>
+        <span id="page-info" class="text-xs text-gray-500"></span>
+        <button id="next-btn" class="text-sm border border-gray-700 text-gray-300 rounded-lg px-4 py-1.5 hover:bg-gray-800 disabled:opacity-30 transition-colors" disabled>
+          Older &rarr;
+        </button>
+      </div>
+      <div id="search-all-section" class="hidden mt-4 text-center">
+        <p class="text-xs text-gray-500 mb-2">Only searching loaded transactions</p>
+        <button id="search-all-btn" class="text-sm border border-gray-700 text-gray-300 rounded-lg px-4 py-1.5 hover:bg-gray-800 transition-colors">
+          Search all transactions
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { auth, db } from "../lib/firebase";
+    import { onAuthStateChanged } from "firebase/auth";
+    import {
+      doc, getDoc, collection, addDoc, updateDoc, deleteDoc,
+      query, orderBy, limit, startAfter, where, getDocs, getCountFromServer,
+      Timestamp, type QueryDocumentSnapshot, type QueryConstraint
+    } from "firebase/firestore";
+    import Fuse from "fuse.js";
+
+    const PAGE_SIZE = 25;
+    const params = new URLSearchParams(window.location.search);
+    const accountId = params.get("id");
+    if (!accountId) window.location.href = "/";
+
+    let currentPage = 0;
+    let firstDocStack: QueryDocumentSnapshot[] = [];
+    let lastVisible: QueryDocumentSnapshot | null = null;
+    let totalCount = 0;
+    let currentBalance = 0;
+
+    interface TxRecord {
+      id: string;
+      type: string;
+      amount: number;
+      memo: string;
+      date: Date;
+      dateTimestamp: Timestamp;
+    }
+    let loadedTransactions: TxRecord[] = [];
+    let allLoaded = false;
+    let searchTimeout: ReturnType<typeof setTimeout>;
+
+    interface MonthlyData {
+      startBalance: number;
+      endBalance: number;
+      interestEarned: number;
+      interestRate: number;
+    }
+    let monthlyMap: Map<string, MonthlyData> = new Map();
+
+    function getMonthKey(date: Date): string {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+      return `${y}-${m}`;
+    }
+
+    function getNextMonthKey(key: string): string {
+      const [y, m] = key.split("-").map(Number);
+      if (m === 12) return `${y + 1}-01`;
+      return `${y}-${String(m + 1).padStart(2, "0")}`;
+    }
+
+    function formatMonthKey(key: string): string {
+      const [y, m] = key.split("-");
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return `${months[parseInt(m) - 1]} ${y}`;
+    }
+
+    function fmtMoney(n: number, showSign = false): string {
+      const abs = Math.abs(n);
+      const [whole, dec] = abs.toFixed(2).split(".");
+      const commaWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const prefix = showSign ? (n >= 0 ? "+" : "-") : (n < 0 ? "-" : "");
+      return `${prefix}$${commaWhole}<span class="text-[0.7em] align-top">.${dec}</span>`;
+    }
+
+    function fmtBal(n: number): string {
+      return fmtMoney(n);
+    }
+
+    function balColor(n: number): string {
+      return n < 0 ? "text-red-400" : "text-gray-500";
+    }
+
+    const loadingEl = document.getElementById("loading")!;
+    const accountView = document.getElementById("account-view")!;
+    const addSection = document.getElementById("add-transaction-section")!;
+    const toggleFormBtn = document.getElementById("toggle-form-btn")!;
+    const txForm = document.getElementById("transaction-form") as HTMLFormElement;
+    const cancelFormBtn = document.getElementById("cancel-form-btn")!;
+    const txEditId = document.getElementById("tx-edit-id") as HTMLInputElement;
+
+    let isAdmin = false;
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "/";
+        return;
+      }
+      const token = await user.getIdTokenResult();
+      isAdmin = token.claims.role === "admin";
+      if (isAdmin) addSection.classList.remove("hidden");
+      await loadAccount();
+    });
+
+    toggleFormBtn.addEventListener("click", () => {
+      txForm.classList.toggle("hidden");
+      resetForm();
+    });
+
+    cancelFormBtn.addEventListener("click", () => {
+      txForm.classList.add("hidden");
+      resetForm();
+    });
+
+    function resetForm() {
+      txForm.reset();
+      txEditId.value = "";
+      (document.getElementById("tx-date") as HTMLInputElement).value = new Date().toLocaleDateString('en-CA');
+    }
+
+    txForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const type = (document.getElementById("tx-type") as HTMLSelectElement).value;
+      const amount = parseFloat((document.getElementById("tx-amount") as HTMLInputElement).value);
+      const memo = (document.getElementById("tx-memo") as HTMLInputElement).value;
+      const dateStr = (document.getElementById("tx-date") as HTMLInputElement).value;
+      const [yr, mo, dy] = dateStr.split("-").map(Number);
+      const date = Timestamp.fromDate(new Date(yr, mo - 1, dy, 12, 0, 0));
+
+      const txData = { type, amount, memo, date };
+      const editId = txEditId.value;
+
+      if (editId) {
+        await updateDoc(doc(db, "accounts", accountId!, "transactions", editId), txData);
+      } else {
+        await addDoc(collection(db, "accounts", accountId!, "transactions"), {
+          ...txData,
+          createdAt: Timestamp.now(),
+        });
+      }
+
+      txForm.classList.add("hidden");
+      resetForm();
+      filterType.value = "";
+      filterFrom.value = "";
+      filterTo.value = "";
+      searchInput.value = "";
+      filterClear.classList.add("hidden");
+      allLoaded = false;
+      await loadAccount();
+    });
+
+    async function loadAccount() {
+      const accountDoc = await getDoc(doc(db, "accounts", accountId!));
+      if (!accountDoc.exists()) {
+        loadingEl.innerHTML = '<p class="text-red-400">Account not found</p>';
+        return;
+      }
+
+      const data = accountDoc.data();
+      loadingEl.classList.add("hidden");
+      accountView.classList.remove("hidden");
+
+      document.getElementById("account-name")!.textContent = data.name;
+      currentBalance = data.currentBalance ?? 0;
+      const balanceEl = document.getElementById("account-balance")!;
+      balanceEl.innerHTML = fmtMoney(currentBalance);
+      balanceEl.className = `text-3xl font-bold tabular-nums ${currentBalance < 0 ? 'text-red-400' : 'text-emerald-400'}`;
+
+      document.getElementById("stat-interest")!.innerHTML = fmtMoney(data.totalInterest ?? 0);
+      document.getElementById("stat-deposits")!.innerHTML = fmtMoney(data.totalDeposits ?? 0);
+      document.getElementById("stat-fines")!.innerHTML = fmtMoney(data.totalFines ?? 0);
+
+      const monthlySnap = await getDocs(
+        query(collection(db, "accounts", accountId!, "monthly"), orderBy("__name__"))
+      );
+      monthlyMap = new Map();
+      monthlySnap.forEach((d) => monthlyMap.set(d.id, d.data() as MonthlyData));
+
+      const settingsDoc = await getDoc(doc(db, "settings", "interest"));
+      const defaultRate = settingsDoc.exists() ? (settingsDoc.data()!.defaultRate as number) : 0.02;
+      const rate = data.rateOverride ?? defaultRate;
+      const nextInterest = currentBalance > 0 ? currentBalance * rate : 0;
+      document.getElementById("stat-next-interest")!.innerHTML = fmtMoney(nextInterest);
+      document.getElementById("stat-rate")!.textContent = `${(rate * 100).toFixed(0)}% monthly`;
+
+      const countSnap = await getCountFromServer(
+        collection(db, "accounts", accountId!, "transactions")
+      );
+      totalCount = countSnap.data().count;
+
+      currentPage = 0;
+      firstDocStack = [];
+      await loadTransactions();
+    }
+
+    const paginationEl = document.getElementById("pagination")!;
+    const prevBtn = document.getElementById("prev-btn") as HTMLButtonElement;
+    const nextBtn = document.getElementById("next-btn") as HTMLButtonElement;
+    const pageInfo = document.getElementById("page-info")!;
+
+    const filterType = document.getElementById("filter-type") as HTMLSelectElement;
+    const filterFrom = document.getElementById("filter-from") as HTMLInputElement;
+    const filterTo = document.getElementById("filter-to") as HTMLInputElement;
+    const filterClear = document.getElementById("filter-clear")!;
+    const searchInput = document.getElementById("search-input") as HTMLInputElement;
+    const searchAllSection = document.getElementById("search-all-section")!;
+    const searchAllBtn = document.getElementById("search-all-btn")!;
+
+    function hasFilters() {
+      return filterType.value || filterFrom.value || filterTo.value || searchInput.value;
+    }
+
+    function applyFilters() {
+      filterClear.classList.toggle("hidden", !hasFilters());
+      currentPage = 0;
+      if (allLoaded) {
+        renderFromMemory();
+      } else if (searchInput.value) {
+        renderSearchResults();
+      } else {
+        searchAllSection.classList.add("hidden");
+        currentPage = 0;
+        firstDocStack = [];
+        lastVisible = null;
+        loadTransactions();
+      }
+    }
+
+    function renderFromMemory() {
+      let pool = loadedTransactions;
+
+      if (filterType.value) {
+        pool = pool.filter(tx => tx.type === filterType.value);
+      }
+      if (filterFrom.value) {
+        const from = new Date(filterFrom.value);
+        pool = pool.filter(tx => tx.date >= from);
+      }
+      if (filterTo.value) {
+        const [ty, tm, td] = filterTo.value.split("-").map(Number);
+        const to = new Date(ty, tm - 1, td + 1);
+        pool = pool.filter(tx => tx.date < to);
+      }
+
+      const term = searchInput.value.trim();
+      if (term) {
+        const fuse = new Fuse(pool, {
+          keys: ["memo", "type"],
+          threshold: 0.4,
+          ignoreLocation: true,
+        });
+        pool = fuse.search(term).map(r => r.item);
+      }
+
+      searchAllSection.classList.add("hidden");
+
+      const totalPages = Math.ceil(pool.length / PAGE_SIZE);
+      const page = pool.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+      renderTransactionList(page);
+
+      if (totalPages > 1) {
+        paginationEl.classList.remove("hidden");
+        prevBtn.disabled = currentPage === 0;
+        nextBtn.disabled = currentPage >= totalPages - 1;
+        pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+      } else {
+        paginationEl.classList.add("hidden");
+      }
+    }
+
+    function renderSearchResults() {
+      const term = searchInput.value.trim();
+      if (!term) {
+        searchAllSection.classList.add("hidden");
+        currentPage = 0;
+        firstDocStack = [];
+        lastVisible = null;
+        loadTransactions();
+        return;
+      }
+
+      let pool = loadedTransactions;
+
+      if (filterType.value) {
+        pool = pool.filter(tx => tx.type === filterType.value);
+      }
+      if (filterFrom.value) {
+        const from = new Date(filterFrom.value);
+        pool = pool.filter(tx => tx.date >= from);
+      }
+      if (filterTo.value) {
+        const [ty, tm, td] = filterTo.value.split("-").map(Number);
+        const to = new Date(ty, tm - 1, td + 1);
+        pool = pool.filter(tx => tx.date < to);
+      }
+
+      const fuse = new Fuse(pool, {
+        keys: ["memo", "type"],
+        threshold: 0.4,
+        ignoreLocation: true,
+      });
+      const results = fuse.search(term).map(r => r.item);
+
+      searchAllSection.classList.toggle("hidden", allLoaded);
+
+      const totalPages = Math.ceil(results.length / PAGE_SIZE);
+      const page = results.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+      renderTransactionList(page);
+
+      if (totalPages > 1) {
+        paginationEl.classList.remove("hidden");
+        prevBtn.disabled = currentPage === 0;
+        nextBtn.disabled = currentPage >= totalPages - 1;
+        pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+      } else {
+        paginationEl.classList.add("hidden");
+      }
+    }
+
+
+    async function loadAllTransactions() {
+      searchAllBtn.textContent = "Loading...";
+      searchAllBtn.setAttribute("disabled", "true");
+      const txCol = collection(db, "accounts", accountId!, "transactions");
+      const q = query(txCol, orderBy("date", "desc"));
+      const txSnap = await getDocs(q);
+      loadedTransactions = txSnap.docs.map(d => {
+        const tx = d.data();
+        return {
+          id: d.id,
+          type: tx.type,
+          amount: tx.amount,
+          memo: tx.memo || "",
+          date: tx.date.toDate(),
+          dateTimestamp: tx.date,
+        };
+      });
+      allLoaded = true;
+      searchAllBtn.textContent = "Search all transactions";
+      searchAllBtn.removeAttribute("disabled");
+      renderFromMemory();
+    }
+
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(applyFilters, 200);
+    });
+
+    searchAllBtn.addEventListener("click", loadAllTransactions);
+
+    filterType.addEventListener("change", applyFilters);
+    filterFrom.addEventListener("change", applyFilters);
+    filterTo.addEventListener("change", applyFilters);
+    filterClear.addEventListener("click", () => {
+      filterType.value = "";
+      filterFrom.value = "";
+      filterTo.value = "";
+      searchInput.value = "";
+      applyFilters();
+    });
+
+    prevBtn.addEventListener("click", async () => {
+      if (currentPage > 0) {
+        currentPage--;
+        if (allLoaded) {
+          renderFromMemory();
+        } else if (searchInput.value.trim()) {
+          renderSearchResults();
+        } else {
+          lastVisible = firstDocStack[currentPage] || null;
+          firstDocStack.pop();
+          await loadTransactions(currentPage === 0 ? null : firstDocStack[currentPage - 1]);
+        }
+      }
+    });
+
+    nextBtn.addEventListener("click", async () => {
+      if (allLoaded) {
+        currentPage++;
+        renderFromMemory();
+      } else if (searchInput.value.trim()) {
+        currentPage++;
+        renderSearchResults();
+      } else if (lastVisible) {
+        firstDocStack.push(lastVisible);
+        currentPage++;
+        await loadTransactions(lastVisible);
+      }
+    });
+
+    function renderTransactionList(txs: TxRecord[]) {
+      const listEl = document.getElementById("transactions-list")!;
+      listEl.innerHTML = "";
+
+      if (txs.length === 0) {
+        listEl.innerHTML = '<p class="text-gray-500">No transactions found.</p>';
+        return;
+      }
+
+      const table = document.createElement("table");
+      table.className = "w-full text-sm border-collapse";
+      const tbody = document.createElement("tbody");
+      table.appendChild(tbody);
+
+      let prevMonthKey = "";
+
+      for (const tx of txs) {
+        const monthKey = getMonthKey(tx.date);
+
+        if (monthKey !== prevMonthKey) {
+          const hr = document.createElement("tr");
+          hr.innerHTML = `
+            <th class="pt-6 pb-2 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">${formatMonthKey(monthKey)}</th>
+            <th class="pt-6 pb-2 px-4 text-right text-xs font-normal text-gray-600">Amount</th>
+            ${isAdmin ? '<th class="pt-6 pb-2 px-2"></th>' : ""}
+          `;
+          tbody.appendChild(hr);
+          prevMonthKey = monthKey;
+        }
+
+        const dateStr = tx.date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+        const amtColor = tx.type === "deposit" ? "text-emerald-400" : "text-red-400";
+
+        const tr = document.createElement("tr");
+        tr.className = "border-b border-gray-800/50 hover:bg-gray-800/30";
+        tr.innerHTML = `
+          <td class="py-3 px-4">
+            <div class="font-medium text-gray-200">${tx.memo || tx.type}</div>
+            <div class="text-xs text-gray-600 capitalize">${tx.type} &middot; ${dateStr}</div>
+          </td>
+          <td class="py-3 px-4 text-right font-semibold ${amtColor} tabular-nums whitespace-nowrap">${fmtMoney(tx.type === "deposit" ? tx.amount : -tx.amount, true)}</td>
+          ${isAdmin ? `
+            <td class="py-3 px-2 text-right whitespace-nowrap">
+              <button data-edit="${tx.id}" class="text-gray-600 hover:text-blue-400 text-xs">edit</button>
+              <button data-delete="${tx.id}" class="text-gray-600 hover:text-red-400 text-xs ml-2">del</button>
+            </td>
+          ` : ""}
+        `;
+        tbody.appendChild(tr);
+      }
+
+      listEl.appendChild(table);
+      attachEditDeleteHandlers(listEl);
+    }
+
+    function attachEditDeleteHandlers(listEl: HTMLElement) {
+      listEl.querySelectorAll("[data-edit]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = (btn as HTMLElement).dataset.edit!;
+          const txDoc = await getDoc(doc(db, "accounts", accountId!, "transactions", id));
+          if (!txDoc.exists()) return;
+          const tx = txDoc.data();
+          txForm.classList.remove("hidden");
+          txEditId.value = id;
+          (document.getElementById("tx-type") as HTMLSelectElement).value = tx.type;
+          (document.getElementById("tx-amount") as HTMLInputElement).value = tx.amount.toString();
+          (document.getElementById("tx-memo") as HTMLInputElement).value = tx.memo || "";
+          const d = tx.date.toDate();
+          (document.getElementById("tx-date") as HTMLInputElement).value = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`;
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      });
+
+      listEl.querySelectorAll("[data-delete]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = (btn as HTMLElement).dataset.delete!;
+          if (!confirm("Delete this transaction?")) return;
+          await deleteDoc(doc(db, "accounts", accountId!, "transactions", id));
+          totalCount--;
+          filterType.value = "";
+          filterFrom.value = "";
+          filterTo.value = "";
+          searchInput.value = "";
+          filterClear.classList.add("hidden");
+          allLoaded = false;
+          await loadAccount();
+        });
+      });
+    }
+
+    async function loadTransactions(afterDoc?: QueryDocumentSnapshot | null) {
+      const txCol = collection(db, "accounts", accountId!, "transactions");
+      const constraints: QueryConstraint[] = [orderBy("date", "desc")];
+
+      if (filterType.value) {
+        constraints.push(where("type", "==", filterType.value));
+      }
+      if (filterFrom.value) {
+        const [fy, fm, fd] = filterFrom.value.split("-").map(Number);
+        constraints.push(where("date", ">=", Timestamp.fromDate(new Date(fy, fm - 1, fd))));
+      }
+      if (filterTo.value) {
+        const [ty, tm, td] = filterTo.value.split("-").map(Number);
+        constraints.push(where("date", "<", Timestamp.fromDate(new Date(ty, tm - 1, td + 1))));
+      }
+
+      constraints.push(limit(PAGE_SIZE));
+      if (afterDoc) constraints.push(startAfter(afterDoc));
+
+      const q = query(txCol, ...constraints);
+
+      const txSnap = await getDocs(q);
+      const listEl = document.getElementById("transactions-list")!;
+      listEl.innerHTML = "";
+
+      if (txSnap.empty) {
+        listEl.innerHTML = '<p class="text-gray-500">No transactions yet.</p>';
+        paginationEl.classList.add("hidden");
+        return;
+      }
+
+      lastVisible = txSnap.docs[txSnap.docs.length - 1];
+
+      // Cache loaded transactions for search (don't overwrite if we already have all)
+      if (!allLoaded && currentPage === 0 && !filterType.value && !filterFrom.value && !filterTo.value) {
+        loadedTransactions = txSnap.docs.map(d => {
+          const tx = d.data();
+          return {
+            id: d.id,
+            type: tx.type,
+            amount: tx.amount,
+            memo: tx.memo || "",
+            date: tx.date.toDate(),
+            dateTimestamp: tx.date,
+          };
+        });
+        allLoaded = txSnap.docs.length < PAGE_SIZE;
+      }
+
+      const txDocs = txSnap.docs;
+      const pageRows: { txDoc: typeof txDocs[0]; balance: number }[] = [];
+
+      let runningBal = 0;
+      let currentMonth = "";
+
+      if (currentPage === 0) {
+        runningBal = currentBalance;
+        const nowMonth = getMonthKey(new Date());
+        const firstTxMonth = getMonthKey(txDocs[0].data().date.toDate());
+        let m = nowMonth;
+        while (m > firstTxMonth) {
+          const monthly = monthlyMap.get(m);
+          if (monthly) runningBal -= monthly.interestEarned;
+          const [y, mo] = m.split("-").map(Number);
+          m = mo === 1 ? `${y-1}-12` : `${y}-${String(mo-1).padStart(2,"0")}`;
+        }
+      }
+
+      for (let i = 0; i < txDocs.length; i++) {
+        const tx = txDocs[i].data();
+        const txMonth = getMonthKey(tx.date.toDate());
+
+        if (txMonth !== currentMonth) {
+          if (currentPage === 0 && i === 0) {
+            // Already set runningBal above
+          } else if (currentMonth !== "") {
+            const monthly = monthlyMap.get(currentMonth);
+            if (monthly) runningBal -= monthly.interestEarned;
+          } else if (currentPage > 0 && i === 0) {
+            const monthly = monthlyMap.get(txMonth);
+            runningBal = monthly ? monthly.endBalance : 0;
+          }
+          currentMonth = txMonth;
+        }
+
+        pageRows.push({ txDoc: txDocs[i], balance: runningBal });
+
+        const signed = tx.type === "deposit" ? tx.amount : -tx.amount;
+        runningBal -= signed;
+      }
+
+      const table = document.createElement("table");
+      table.className = "w-full text-sm border-collapse";
+      const tbody = document.createElement("tbody");
+      table.appendChild(tbody);
+
+      let prevMonthKey = "";
+
+      function addInterestRow(mk: string) {
+        const monthly = monthlyMap.get(mk);
+        if (!monthly || monthly.interestEarned <= 0) return;
+        const ir = document.createElement("tr");
+        ir.className = "bg-blue-950/30";
+        ir.innerHTML = `
+          <td class="py-2 px-4 text-blue-400" colspan="2">
+            <span class="font-medium">Savings interest</span>
+            <span class="text-blue-600 ml-2 text-xs">${formatMonthKey(mk)} 1st</span>
+            <span class="text-xs text-blue-700 ml-1">${(monthly.interestRate * 100).toFixed(0)}%</span>
+          </td>
+          <td class="py-2 px-4 text-right font-semibold text-blue-400 tabular-nums whitespace-nowrap">${fmtMoney(monthly.interestEarned, true)}</td>
+          ${isAdmin ? '<td></td>' : ""}
+        `;
+        tbody.appendChild(ir);
+      }
+
+      for (const { txDoc, balance } of pageRows) {
+        const tx = txDoc.data();
+        const date = tx.date.toDate();
+        const monthKey = getMonthKey(date);
+
+        if (monthKey !== prevMonthKey) {
+          if (prevMonthKey !== "") addInterestRow(prevMonthKey);
+
+          const hr = document.createElement("tr");
+          hr.innerHTML = `
+            <th class="pt-6 pb-2 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">${formatMonthKey(monthKey)}</th>
+            <th class="pt-6 pb-2 px-4 text-right text-xs font-normal text-gray-600">Amount</th>
+            <th class="pt-6 pb-2 px-4 text-right text-xs font-normal text-gray-600">Balance</th>
+            ${isAdmin ? '<th class="pt-6 pb-2 px-2"></th>' : ""}
+          `;
+          tbody.appendChild(hr);
+          prevMonthKey = monthKey;
+        }
+
+        const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+        const amtColor = tx.type === "deposit" ? "text-emerald-400" : "text-red-400";
+
+        const tr = document.createElement("tr");
+        tr.className = "border-b border-gray-800/50 hover:bg-gray-800/30";
+        tr.innerHTML = `
+          <td class="py-3 px-4">
+            <div class="font-medium text-gray-200">${tx.memo || tx.type}</div>
+            <div class="text-xs text-gray-600 capitalize">${tx.type} &middot; ${dateStr}</div>
+          </td>
+          <td class="py-3 px-4 text-right font-semibold ${amtColor} tabular-nums whitespace-nowrap">${fmtMoney(tx.type === "deposit" ? tx.amount : -tx.amount, true)}</td>
+          <td class="py-3 px-4 text-right ${balColor(balance)} tabular-nums whitespace-nowrap">${fmtBal(balance)}</td>
+          ${isAdmin ? `
+            <td class="py-3 px-2 text-right whitespace-nowrap">
+              <button data-edit="${txDoc.id}" class="text-gray-600 hover:text-blue-400 text-xs">edit</button>
+              <button data-delete="${txDoc.id}" class="text-gray-600 hover:text-red-400 text-xs ml-2">del</button>
+            </td>
+          ` : ""}
+        `;
+        tbody.appendChild(tr);
+      }
+
+      if (prevMonthKey) addInterestRow(prevMonthKey);
+      listEl.appendChild(table);
+
+      // Pagination
+      const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+      if (totalPages > 1) {
+        paginationEl.classList.remove("hidden");
+        prevBtn.disabled = currentPage === 0;
+        nextBtn.disabled = txSnap.docs.length < PAGE_SIZE;
+        pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+      } else {
+        paginationEl.classList.add("hidden");
+      }
+
+      attachEditDeleteHandlers(listEl);
+    }
+  </script>
+</Layout>
