@@ -73,6 +73,12 @@ accounts/{accountId}/monthly/{YYYY-MM}
 - Interest is applied on the 1st and folded into the next month's `startBalance`, so it compounds — months of inactivity still grow the balance.
 - Each monthly snapshot stamps the `interestRate` it used, so history stays accurate even after rate changes.
 
+### Changing the rate
+
+- **Global, going forward** — re-run `npx tsx scripts/init-settings.ts <rate>` (or edit `settings/interest.defaultRate`). The new rate applies to future monthly runs; already-recorded months keep the `interestRate` they were stamped with.
+- **Per child** — set `accounts/{id}.rateOverride` to a number to override the global rate for that child, or `null` to fall back to it. There's no helper script; edit the field directly (e.g. in the Firestore console), then run `npx tsx scripts/recompute-all.ts` to rebuild snapshots and balances.
+- **Retroactively, from a past month** — call the admin-only `changeRate` callable with `{ rate, effectiveMonth: "YYYY-MM", accountId? }` (omit `accountId` to change the global default). It updates the rate and recomputes every month from `effectiveMonth` forward. This function is deployed but not wired to the UI — invoke it from your own admin tooling, or use the manual edit + `recompute-all.ts` path above.
+
 ### The two snapshot states
 
 1. **Created on the 1st** by the monthly cron: `startBalance` = previous month's `endBalance` + interest; `endBalance` starts equal to it. This is when interest is applied.
