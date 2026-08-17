@@ -85,6 +85,10 @@ accounts/{accountId}/monthly/{YYYY-MM}
 - **Per child** — set `accounts/{id}.rateOverride` to a number to override the global rate for that child, or `null` to fall back to it. There's no helper script; edit the field directly (e.g. in the Firestore console), then run `npx tsx scripts/recompute-all.ts` to rebuild snapshots and balances.
 - **Retroactively, from a past month** — call the admin-only `changeRate` callable with `{ rate, effectiveMonth: "YYYY-MM", accountId? }` (omit `accountId` to change the global default). It updates the rate and recomputes every month from `effectiveMonth` forward. This function is deployed but not wired to the UI — invoke it from your own admin tooling, or use the manual edit + `recompute-all.ts` path above.
 
+### Validating a balance
+
+Balances are derived by replaying transactions, not stored as a running total. To verify a cached balance is correct, replay the history independently — **run it in UTC to match Cloud Functions**, or month-boundary transactions bucket into the wrong month and produce a phantom discrepancy. See [docs/validation.md](docs/validation.md).
+
 ### The two snapshot states
 
 1. **Created on the 1st** by the monthly cron: `startBalance` = previous month's `endBalance` + interest; `endBalance` starts equal to it. This is when interest is applied.
@@ -146,6 +150,21 @@ You can run the whole app on your own computer using Firebase's emulators — no
    - **Email:** `test@test.com`  **Password:** `test1234`
 
 That test account and a few sample kids are created by `npm run seed`. Nothing here touches the cloud.
+
+## Cost to Run
+
+For a single family, expect **$0–$1/month** — effectively free. The app is tiny (a handful of accounts, a few writes a week, a couple of scheduled functions), and its entire footprint fits inside Blaze's perpetual free tier with room to spare:
+
+| Service | Typical family usage | Blaze free tier (monthly) | Expected charge |
+|---------|----------------------|---------------------------|-----------------|
+| Cloud Functions | ~60–100 invocations/mo (transactions + 2 crons) | 2,000,000 invocations | $0 |
+| Firestore | hundreds of reads/writes/mo | 50k reads + 20k writes + 20k deletes **/day** | $0 |
+| Hosting | static site, a few MB | 10 GB stored + 360 MB/day transfer | $0 |
+| Cloud Storage | backups + summary JSON, a few MB | 5 GB stored + 1 GB/day download | $0 |
+
+**Why Blaze at all?** The free "Spark" plan can't run Cloud Functions, which the app needs for interest and backups — so a card is required even though the bill stays ~$0. The rare cases that cost more than a dollar: very heavy backup retention, or a runaway loop. Set a [budget alert](https://cloud.google.com/billing/docs/how-to/budgets) (e.g. $5/month) for peace of mind — see step 2.
+
+> These are estimates based on Google's published [Firebase pricing](https://firebase.google.com/pricing); free-tier limits can change, and traffic beyond one family's use will cost more.
 
 ## Deploy Your Own Instance
 
