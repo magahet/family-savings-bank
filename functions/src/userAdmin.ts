@@ -32,47 +32,88 @@ async function anAdminExists(): Promise<boolean> {
 }
 
 /**
- * Public: does this instance still need its first admin? Returns only a boolean,
- * so it is safe to call before anyone is signed in — the first-run UI uses it to
- * decide whether to show the "set up your bank" panel.
+ * Public: is this instance ready for, and still in need of, first-run setup?
+ * Safe to call before anyone is signed in — the first-run UI uses it to decide
+ * what to show. Returns only booleans, never the allowlisted owner email.
+ *   needsSetup    — no admin has claimed this bank yet.
+ *   ownerEmailSet — the operator has authorized an owner email (setup is "open").
  */
 export const needsSetup = onCall(async () => {
-  const claimed = (await getFirestore().collection("settings").doc("system").get()).data()?.ownerClaimed === true;
-  return { needsSetup: !claimed && !(await anAdminExists()) };
+  const data = (await getFirestore().collection("settings").doc("system").get()).data();
+  const claimed = data?.ownerClaimed === true;
+  const ownerEmailSet = typeof data?.ownerEmail === "string" && data.ownerEmail.trim() !== "";
+  return { needsSetup: !claimed && !(await anAdminExists()), ownerEmailSet };
 });
 
 /**
- * First-run only: promote the CALLER to admin, but only while no admin exists.
- * Self-locking — once the first admin is set, this permanently refuses, so it can
- * never be used to escalate privileges afterward. A Firestore transaction on
- * settings/system makes concurrent first calls race-safe.
+ * First-run only: provision the first admin. There is no open registration — the
+ * caller must present the email the operator pre-authorized in settings/system
+ * (written server-side via `scripts/set-owner.ts`, never by a client). Only that
+ * email can claim admin, and only while no admin exists yet.
+ *
+ * The owner account is created server-side (public self-signup is disabled), so
+ * this callable is intentionally public: it is safe because it grants admin ONLY
+ * to the allowlisted email and self-locks after the first claim. A Firestore
+ * transaction on settings/system reserves the claim race-safely; if provisioning
+ * the Auth user then fails, the reservation is rolled back so setup can retry.
  */
 export const bootstrapFirstAdmin = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Sign in (or create your login) first.");
+  const { email, password } = request.data as { email?: string; password?: string };
+  if (!email || typeof email !== "string") {
+    throw new HttpsError("invalid-argument", "email is required.");
   }
+  if (!password || typeof password !== "string" || password.length < 6) {
+    throw new HttpsError("invalid-argument", "password must be at least 6 characters.");
+  }
+  const normEmail = email.trim().toLowerCase();
+
   const db = getFirestore();
+  const auth = getAuth();
   const systemRef = db.collection("settings").doc("system");
 
+  // Reserve the claim atomically, gating on the allowlisted owner email.
   await db.runTransaction(async (tx) => {
-    const snap = await tx.get(systemRef);
-    if (snap.data()?.ownerClaimed === true) {
+    const data = (await tx.get(systemRef)).data();
+    if (data?.ownerClaimed === true) {
       throw new HttpsError("failed-precondition", "This bank has already been set up.");
+    }
+    const ownerEmail = typeof data?.ownerEmail === "string" ? data.ownerEmail.trim().toLowerCase() : "";
+    if (!ownerEmail) {
+      throw new HttpsError("failed-precondition", "Setup isn't open yet — the operator must authorize an owner email first.");
+    }
+    if (normEmail !== ownerEmail) {
+      throw new HttpsError("permission-denied", "That email isn't authorized to set up this bank.");
     }
     // Backstop against a wiped flag: if an admin somehow already exists, lock and refuse.
     if (await anAdminExists()) {
       tx.set(systemRef, { ownerClaimed: true }, { merge: true });
       throw new HttpsError("failed-precondition", "This bank has already been set up.");
     }
-    tx.set(systemRef, {
-      ownerClaimed: true,
-      ownerUid: request.auth!.uid,
-      claimedAt: FieldValue.serverTimestamp(),
-    });
+    tx.set(systemRef, { ownerClaimed: true, claimedAt: FieldValue.serverTimestamp() }, { merge: true });
   });
 
-  await getAuth().setCustomUserClaims(request.auth.uid, { role: "admin" });
-  return { success: true };
+  // Claim reserved — provision (or adopt) the owner's admin login.
+  try {
+    let uid: string;
+    try {
+      uid = (await auth.createUser({ email: normEmail, password })).uid;
+    } catch (err) {
+      // A login with the allowlisted email may already exist (e.g. created in the
+      // console). Adopt it — admin is granted to that account, not to this caller.
+      if ((err as { code?: string }).code === "auth/email-already-exists") {
+        uid = (await auth.getUserByEmail(normEmail)).uid;
+      } else {
+        throw err;
+      }
+    }
+    await auth.setCustomUserClaims(uid, { role: "admin" });
+    await systemRef.set({ ownerUid: uid }, { merge: true });
+    return { success: true };
+  } catch (err) {
+    // Provisioning failed — release the reservation so setup can be retried.
+    await systemRef.set({ ownerClaimed: false, claimedAt: FieldValue.delete() }, { merge: true });
+    throw err;
+  }
 });
 
 /** Admin-only: create a login and assign its role in one call. */

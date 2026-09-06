@@ -9,35 +9,59 @@ how that's solved and why it's safe.
 
 ## The first-run claim
 
+There is **no open admin registration**. Two things gate the first admin: an
+operator-authorized *owner-email allowlist*, and disabled public sign-up. Neither
+can be set from a browser, so a stranger who finds the URL can do nothing.
+
+### Step 1 — the operator authorizes an owner email (server-side)
+
+Before setup can happen, someone with deploy credentials runs:
+
+```
+npx tsx scripts/set-owner.ts owner@example.com
+```
+
+This writes `settings/system.ownerEmail`. Firestore rules forbid clients from
+writing `settings/*`, so **only someone with Admin SDK access can open setup** —
+this is the allowlist. It refuses once the bank is already claimed, so it can't
+hand the bank to a new email after the fact (reset the instance to start over).
+
+### Step 2 — the owner claims admin in the browser
+
 Two Cloud Functions handle bootstrapping ([functions/src/userAdmin.ts](../functions/src/userAdmin.ts)):
 
-- **`needsSetup`** (public) — returns only `{ needsSetup: boolean }`. It's `true`
-  when no owner has been claimed *and* no admin exists. The first-run UI calls it
-  to decide whether to show the **Set up your bank** panel. It reveals nothing
-  sensitive, so it's safe to call before anyone signs in.
-- **`bootstrapFirstAdmin`** (requires sign-in) — promotes the **caller** to admin,
-  but only while the bank has no admin yet.
+- **`needsSetup`** (public) — returns only `{ needsSetup, ownerEmailSet }` booleans,
+  never the email itself. The first-run UI uses them to decide whether to show the
+  **Set up your bank** form (only once an owner email is authorized) or a "setup
+  isn't open yet" message. Safe to call before anyone signs in.
+- **`bootstrapFirstAdmin`** (public, but allowlist-gated) — takes `{ email, password }`.
+  It verifies the email equals the authorized `ownerEmail`, then provisions that
+  admin **server-side** (public sign-up is off, so the account can't pre-exist by
+  self-registration). Only the allowlisted email can ever succeed.
 
-`bootstrapFirstAdmin` is **self-locking**. It runs a Firestore transaction on
+`bootstrapFirstAdmin` is **self-locking**. A Firestore transaction on
 `settings/system`:
 
 1. If `ownerClaimed === true`, it refuses.
-2. As a backstop (in case the flag doc was wiped), if any admin already exists it
+2. If no `ownerEmail` is set, it refuses ("setup isn't open").
+3. If the caller's email ≠ `ownerEmail`, it refuses (`permission-denied`).
+4. As a backstop (in case the flag doc was wiped), if any admin already exists it
    sets the flag and refuses.
-3. Otherwise it stamps `ownerClaimed`, `ownerUid`, and `claimedAt`, then sets the
-   caller's `role: "admin"` claim.
+5. Otherwise it reserves the claim (`ownerClaimed`, `claimedAt`), then creates the
+   owner's admin login (adopting a same-email account if one already exists) and
+   stamps `ownerUid`. If provisioning fails, the reservation is rolled back so
+   setup can be retried.
 
 Once the first admin is claimed, this function **permanently refuses** — it can
 never be used to escalate privileges afterward. The transaction makes concurrent
 first calls race-safe: exactly one wins.
 
-### The setup window
+### Public sign-up is disabled
 
-Before the first admin exists, the setup screen lets anyone create a login and
-claim ownership. In practice you deploy and immediately claim it yourself, so the
-window is seconds long. If you want zero exposure, claim ownership before sharing
-the URL, or pre-create your login in the Firebase Console first — the setup screen
-signs into an existing login too.
+`scripts/disable-signup.ts` turns off Identity Platform self-service sign-up, so
+the client `accounts:signUp` API returns `ADMIN_ONLY_OPERATION`. Every account is
+therefore minted server-side — by the owner bootstrap above or by the admin "Add
+user" tool. Run it once per instance as part of deploy (see the [README](../README.md)).
 
 ## After setup: managing users in-app
 

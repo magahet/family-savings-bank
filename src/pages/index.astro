@@ -9,12 +9,19 @@ import { APP_NAME, APP_TAGLINE } from "../config";
       <p class="text-gray-500">Loading...</p>
     </div>
 
-    <!-- First-run: no admin exists yet. Create the owner login. -->
+    <!-- First-run: no admin exists yet. Only the operator-authorized owner email
+         can create the admin login here (see scripts/set-owner.ts). -->
     <div id="setup" class="hidden max-w-sm mx-auto py-20">
       <h1 class="text-3xl font-bold mb-2 text-center text-emerald-400">{APP_NAME}</h1>
       <p class="text-center text-gray-500 mb-2 text-sm">Set up your bank</p>
-      <p class="text-center text-gray-500 mb-8 text-sm">Create the administrator login. This one-time step is only available until the first admin is set.</p>
-      <form id="setup-form" class="space-y-4">
+      <!-- Shown when the operator hasn't authorized an owner email yet. -->
+      <div id="setup-closed" class="hidden text-center text-gray-500 text-sm mt-6 space-y-2">
+        <p>This bank isn't open for setup yet.</p>
+        <p class="text-gray-600">The operator must authorize an owner email first:<br />
+          <code class="text-gray-400">npx tsx scripts/set-owner.ts you@example.com</code></p>
+      </div>
+      <p id="setup-open-hint" class="hidden text-center text-gray-500 mb-8 text-sm">Create the administrator login using the authorized owner email. This one-time step locks once the first admin is set.</p>
+      <form id="setup-form" class="hidden space-y-4">
         <div>
           <label for="setup-email" class="block text-sm font-medium mb-1 text-gray-300">Email</label>
           <input type="email" id="setup-email" required
@@ -62,15 +69,7 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     <!-- Signed in but no role assigned. -->
     <div id="norole" class="hidden max-w-sm mx-auto py-20 text-center">
       <p class="text-gray-400 mb-6">Your account doesn't have access yet.</p>
-      <div id="claim-wrap" class="hidden">
-        <p class="text-gray-500 text-sm mb-4">This bank has no administrator yet. Claim ownership to become the admin.</p>
-        <button id="claim-btn"
-          class="bg-emerald-600 text-white rounded-lg px-4 py-2.5 font-medium hover:bg-emerald-500 transition-colors">
-          Claim ownership
-        </button>
-        <p id="claim-error" class="text-red-400 text-sm mt-3 hidden"></p>
-      </div>
-      <p id="norole-contact" class="hidden text-gray-500 text-sm">Ask an administrator to grant you access, then sign out and back in.</p>
+      <p class="text-gray-500 text-sm">Ask an administrator to grant you access, then sign out and back in.</p>
       <button id="norole-logout" class="block mx-auto text-sm text-gray-500 hover:text-gray-300 mt-8 transition-colors">Sign Out</button>
     </div>
 
@@ -113,7 +112,7 @@ import { APP_NAME, APP_TAGLINE } from "../config";
 
   <script>
     import { auth, db, functions } from "../lib/firebase";
-    import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+    import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
     import { collection, getDocs, setDoc, doc, updateDoc, query, orderBy, Timestamp } from "firebase/firestore";
     import { httpsCallable } from "firebase/functions";
 
@@ -132,8 +131,8 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     const loginForm = el("login-form") as HTMLFormElement;
     const loginError = el("login-error");
 
-    const needsSetupFn = httpsCallable<unknown, { needsSetup: boolean }>(functions, "needsSetup");
-    const bootstrapFn = httpsCallable<unknown, { success: boolean }>(functions, "bootstrapFirstAdmin");
+    const needsSetupFn = httpsCallable<unknown, { needsSetup: boolean; ownerEmailSet: boolean }>(functions, "needsSetup");
+    const bootstrapFn = httpsCallable<{ email: string; password: string }, { success: boolean }>(functions, "bootstrapFirstAdmin");
 
     function show(e: HTMLElement) { e.classList.remove("hidden"); }
     function hide(e: HTMLElement) { e.classList.add("hidden"); }
@@ -147,8 +146,16 @@ import { APP_NAME, APP_TAGLINE } from "../config";
       hide(loadingEl);
       if (!user) {
         currentRole = null;
-        const setup = await isSetupNeeded();
-        only(setup ? setupEl : loginEl);
+        const { needsSetup, ownerEmailSet } = await setupStatus();
+        if (needsSetup) {
+          // Setup only proceeds once the operator has authorized an owner email.
+          el("setup-form").classList.toggle("hidden", !ownerEmailSet);
+          el("setup-open-hint").classList.toggle("hidden", !ownerEmailSet);
+          el("setup-closed").classList.toggle("hidden", ownerEmailSet);
+          only(setupEl);
+        } else {
+          only(loginEl);
+        }
         return;
       }
       const token = await user.getIdTokenResult();
@@ -159,19 +166,16 @@ import { APP_NAME, APP_TAGLINE } from "../config";
         settingsLink.classList.toggle("hidden", currentRole !== "admin");
         await loadDashboard();
       } else {
-        // Signed in but unclaimed: offer ownership if the bank still needs setup.
+        // Signed in but no role — an admin must grant access. (No self-claim path.)
         only(noroleEl);
-        const setup = await isSetupNeeded();
-        el("claim-wrap").classList.toggle("hidden", !setup);
-        el("norole-contact").classList.toggle("hidden", setup);
       }
     });
 
-    async function isSetupNeeded(): Promise<boolean> {
+    async function setupStatus(): Promise<{ needsSetup: boolean; ownerEmailSet: boolean }> {
       try {
-        return (await needsSetupFn()).data.needsSetup;
+        return (await needsSetupFn()).data;
       } catch {
-        return false;
+        return { needsSetup: false, ownerEmailSet: false };
       }
     }
 
@@ -191,17 +195,10 @@ import { APP_NAME, APP_TAGLINE } from "../config";
       const email = (el("setup-email") as HTMLInputElement).value.trim();
       const password = (el("setup-password") as HTMLInputElement).value;
       try {
-        try {
-          await createUserWithEmailAndPassword(auth, email, password);
-        } catch (err: any) {
-          // If the login was pre-created (e.g. in the console), just sign in.
-          if (err?.code === "auth/email-already-in-use") {
-            await signInWithEmailAndPassword(auth, email, password);
-          } else {
-            throw err;
-          }
-        }
-        await bootstrapFn();
+        // The server verifies the email against the authorized owner allowlist,
+        // creates the admin account, then we sign in with it.
+        await bootstrapFn({ email, password });
+        await signInWithEmailAndPassword(auth, email, password);
         await refreshAndReload();
       } catch (err: any) {
         setupError.textContent = err?.message ?? "Setup failed.";
@@ -219,17 +216,6 @@ import { APP_NAME, APP_TAGLINE } from "../config";
       } catch (err: any) {
         loginError.textContent = err.message;
         show(loginError);
-      }
-    });
-
-    el("claim-btn").addEventListener("click", async () => {
-      hide(el("claim-error"));
-      try {
-        await bootstrapFn();
-        await refreshAndReload();
-      } catch (err: any) {
-        el("claim-error").textContent = err?.message ?? "Could not claim ownership.";
-        show(el("claim-error"));
       }
     });
 

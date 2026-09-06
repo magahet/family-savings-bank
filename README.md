@@ -250,20 +250,40 @@ npm run deploy
 
 This builds the site and deploys the security rules, database indexes, Cloud Functions, and hosting. The first functions deploy can take a few minutes and may ask permission to enable Google Cloud APIs — say yes. When it finishes it prints your live URL: `https://<your-project-id>.web.app`.
 
-### Step 9 — Set up your bank (in the browser)
+### Step 9 — Harden and set up your bank
 
-Everything else happens in the app — no more terminal commands.
+There is **no open admin registration** on the internet. Two one-time commands lock
+down the instance, then you finish in the browser (see [docs/admin-model.md](docs/admin-model.md)
+for why this is safe).
 
-1. Open your live URL: `https://<your-project-id>.web.app`.
-2. The first time you visit, it shows a **Set up your bank** screen. Enter an email and password for your **parent (admin) login** and click **Create admin & continue**. This one-time screen disappears the moment the first admin is claimed, so no one else can grab it later (see [docs/admin-model.md](docs/admin-model.md)).
-3. You're now signed in as the admin. Click **Settings** (top right) to:
+1. **Turn off public sign-up** so accounts can only be created server-side:
+
+   ```bash
+   npx tsx scripts/disable-signup.ts
+   ```
+
+2. **Authorize the one email allowed to become admin** (the owner allowlist):
+
+   ```bash
+   npx tsx scripts/set-owner.ts you@example.com
+   ```
+
+   Until you do this, the setup screen shows "this bank isn't open for setup yet."
+
+3. Open your live URL `https://<your-project-id>.web.app`. The **Set up your bank**
+   screen now accepts the authorized email — enter it plus a password for your
+   **parent (admin) login** and click **Create admin & continue**. Only that email
+   works, and the screen self-locks the moment the first admin is claimed.
+4. You're now signed in as the admin. Click **Settings** (top right) to:
    - **Interest rate** — set the monthly rate (e.g. `2` for 2%).
    - **Logins** — add your kids' logins and pick each one's role (`child` = read-only, `admin` = full access).
-4. Back on the dashboard, use **+ Add account** to create an account per child, and the ↑ / ↓ arrows to reorder them.
+5. Back on the dashboard, use **+ Add account** to create an account per child, and the ↑ / ↓ arrows to reorder them.
 
 Then start adding transactions. Interest is applied automatically on the 1st of each month.
 
-> **Email/Password sign-in must be enabled** (Step 3) for the setup screen to work — it creates your admin login directly.
+> **Email/Password sign-in must be enabled** (Step 3) for setup to work. Both commands
+> above use the same Application Default Credentials as the other scripts — run
+> `gcloud auth application-default login` once first (see the next section).
 
 ### Optional — command-line admin tools
 
