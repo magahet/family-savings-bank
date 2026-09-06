@@ -90,13 +90,8 @@ import { APP_NAME, APP_TAGLINE } from "../config";
           class="text-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-200 hover:border-gray-600 transition-colors">+ Add account</button>
         <form id="add-account-form" class="hidden mt-3 flex flex-wrap gap-2 items-end bg-gray-900 border border-gray-800 rounded-lg p-4">
           <div>
-            <label for="acct-id" class="block text-xs text-gray-500 mb-1">ID (lowercase, no spaces)</label>
-            <input id="acct-id" placeholder="alice"
-              class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          </div>
-          <div>
-            <label for="acct-name" class="block text-xs text-gray-500 mb-1">Name</label>
-            <input id="acct-name" placeholder="Alice"
+            <label for="acct-name" class="block text-xs text-gray-500 mb-1">Account name</label>
+            <input id="acct-name" placeholder="e.g. Alice"
               class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
           <button type="submit" class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-emerald-500 transition-colors">Create</button>
@@ -227,22 +222,30 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     el("add-account-btn").addEventListener("click", () => addForm.classList.toggle("hidden"));
     el("add-account-cancel").addEventListener("click", () => addForm.classList.add("hidden"));
 
+    // Turn a display name into a URL-safe document id: "Alice B." -> "alice-b".
+    function slugify(name: string): string {
+      return name
+        .toLowerCase()
+        .normalize("NFKD").replace(/[̀-ͯ]/g, "") // strip accents
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
     addForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       hide(el("add-account-error"));
-      const id = (el("acct-id") as HTMLInputElement).value.trim().toLowerCase();
       const name = (el("acct-name") as HTMLInputElement).value.trim();
-      if (!/^[a-z0-9-]+$/.test(id) || !name) {
-        el("add-account-error").textContent = "ID must be lowercase letters/numbers/hyphens; name is required.";
+      if (!name) {
+        el("add-account-error").textContent = "Please enter a name.";
         show(el("add-account-error"));
         return;
       }
       const existing = await getDocs(collection(db, "accounts"));
-      if (existing.docs.some((d) => d.id === id)) {
-        el("add-account-error").textContent = `Account "${id}" already exists.`;
-        show(el("add-account-error"));
-        return;
-      }
+      const taken = new Set(existing.docs.map((d) => d.id));
+      // Derive the id from the name; if that's taken (or empty), add a numeric suffix.
+      const base = slugify(name) || "account";
+      let id = base;
+      for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
       await setDoc(doc(db, "accounts", id), {
         name, order: existing.size, rateOverride: null,
         currentBalance: 0, totalInterest: 0, totalDeposits: 0, totalWithdrawals: 0, totalFines: 0,
