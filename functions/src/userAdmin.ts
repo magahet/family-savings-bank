@@ -133,8 +133,12 @@ export const createUser = onCall(async (request) => {
   try {
     uid = (await auth.createUser({ email, password })).uid;
   } catch (err) {
-    if ((err as { code?: string }).code === "auth/email-already-exists") {
+    const code = (err as { code?: string }).code;
+    if (code === "auth/email-already-exists") {
       throw new HttpsError("already-exists", "A user with that email already exists.");
+    }
+    if (code === "auth/invalid-email") {
+      throw new HttpsError("invalid-argument", "That isn't a valid email address. Tip: use a plus-alias like you+alice@gmail.com for a child.");
     }
     throw err;
   }

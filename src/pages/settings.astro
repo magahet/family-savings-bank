@@ -36,15 +36,15 @@ import { APP_NAME } from "../config";
         <h2 class="font-semibold text-lg text-gray-100 mb-1">Logins</h2>
         <p class="text-sm text-gray-500 mb-4">Parents (admin) have full read/write. Children are read-only. A role change takes effect after the user signs out and back in.</p>
 
-        <form id="add-user-form" class="flex flex-wrap items-end gap-2 mb-5">
+        <form id="add-user-form" class="flex flex-wrap items-end gap-2 mb-2">
           <div>
             <label for="u-email" class="block text-xs text-gray-500 mb-1">Email</label>
-            <input id="u-email" type="email" placeholder="kid@example.com"
+            <input id="u-email" type="email" required placeholder="you+alice@gmail.com"
               class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
           <div>
             <label for="u-password" class="block text-xs text-gray-500 mb-1">Password</label>
-            <input id="u-password" type="text" placeholder="min 6 chars"
+            <input id="u-password" type="text" required minlength="6" placeholder="min 6 chars"
               class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
           <div>
@@ -57,6 +57,11 @@ import { APP_NAME } from "../config";
           <button type="submit" class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-emerald-500 transition-colors">Add login</button>
           <p id="add-user-error" class="w-full text-red-400 text-sm hidden"></p>
         </form>
+        <p class="text-xs text-gray-500 mb-5">
+          Every login is an email address. A child doesn't need their own inbox — use a
+          <strong>plus-alias</strong> of your email, like <code class="text-gray-400">you+alice@gmail.com</code>.
+          It's a separate login, and anything like a password-reset email still lands in your inbox.
+        </p>
 
         <div id="users-list" class="divide-y divide-gray-800"></div>
       </section>
