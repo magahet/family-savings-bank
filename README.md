@@ -283,7 +283,7 @@ for why this is safe).
 
    Until you do this, the setup screen shows "this bank isn't open for setup yet."
 
-3. Open your live URL `https://<your-project-id>.web.app`. The **Set up your bank**
+3. Open your live URL `https://<your-site-id>.web.app`. The **Set up your bank**
    screen now accepts the authorized email — enter it plus a password for your
    **parent (admin) login** and click **Create admin & continue**. Only that email
    works, and the screen self-locks the moment the first admin is claimed.

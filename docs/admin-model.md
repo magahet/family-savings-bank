@@ -2,8 +2,8 @@
 
 Roles in this app are **Firebase Auth custom claims** (`role: "admin"` or
 `role: "child"`). Custom claims can only be written with the Admin SDK — that is,
-server-side, never from a browser. That's what keeps a child (or a stranger who
-signs up) from making themselves an admin. But it creates a chicken-and-egg
+server-side, never from a browser. That's what keeps a child (or anyone else who
+holds a login) from making themselves an admin. But it creates a chicken-and-egg
 problem: **the very first admin has no admin to promote them.** This doc explains
 how that's solved and why it's safe.
 
@@ -39,22 +39,28 @@ Two Cloud Functions handle bootstrapping ([functions/src/userAdmin.ts](../functi
   admin **server-side** (public sign-up is off, so the account can't pre-exist by
   self-registration). Only the allowlisted email can ever succeed.
 
-`bootstrapFirstAdmin` is **self-locking**. A Firestore transaction on
+`bootstrapFirstAdmin` is **self-locking**, and works in two phases.
+
+**Phase 1 — decide and reserve, atomically.** A Firestore transaction on
 `settings/system`:
 
-1. If `ownerClaimed === true`, it refuses.
-2. If no `ownerEmail` is set, it refuses ("setup isn't open").
+1. If `ownerClaimed === true`, it refuses — already set up.
+2. If no `ownerEmail` is set, it refuses — setup isn't open.
 3. If the caller's email ≠ `ownerEmail`, it refuses (`permission-denied`).
 4. As a backstop (in case the flag doc was wiped), if any admin already exists it
    sets the flag and refuses.
-5. Otherwise it reserves the claim (`ownerClaimed`, `claimedAt`), then creates the
-   owner's admin login (adopting a same-email account if one already exists) and
-   stamps `ownerUid`. If provisioning fails, the reservation is rolled back so
-   setup can be retried.
+5. Otherwise it stamps `ownerClaimed` + `claimedAt` to reserve the claim.
+
+**Phase 2 — provision the login.** *After* the transaction commits (an Auth user
+can't be created inside a Firestore transaction), it uses the Admin SDK to create
+the account with the submitted password — or adopt an existing account with that
+email (e.g. one created in the console) — set its `role: "admin"` claim, and stamp
+`ownerUid`. If any of this fails, the phase‑1 reservation is rolled back
+(`ownerClaimed` cleared) so setup can be retried.
 
 Once the first admin is claimed, this function **permanently refuses** — it can
-never be used to escalate privileges afterward. The transaction makes concurrent
-first calls race-safe: exactly one wins.
+never be used to escalate privileges afterward. The phase‑1 transaction makes
+concurrent first calls race-safe: exactly one reserves the claim.
 
 ### Public sign-up is disabled
 
