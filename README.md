@@ -290,6 +290,8 @@ for why this is safe).
 4. You're now signed in as the admin. Click **Settings** (top right) to:
    - **Interest rate** — set the monthly rate (e.g. `2` for 2%).
    - **Logins** — add your kids' logins and pick each one's role (`child` = read-only, `admin` = full access).
+   - **Accounts** — rename or archive an account, restore or permanently delete an archived one (archive-first and type-to-confirm; see [data-safety.md](docs/data-safety.md#deleting-an-account-from-the-app)).
+   - **Your data** — download a full JSON backup or a transactions CSV any time.
 5. Back on the dashboard, use **+ Add account** to create an account per child, and the ↑ / ↓ arrows to reorder them.
 
 Then start adding transactions. Interest is applied automatically on the 1st of each month.

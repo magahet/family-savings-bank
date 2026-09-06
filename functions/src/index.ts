@@ -13,4 +13,5 @@ export {
   setUserRole,
   deleteUser,
 } from "./userAdmin.js";
+export { deleteAccount } from "./accountAdmin.js";
 export { weeklyBackup } from "./backup.js";

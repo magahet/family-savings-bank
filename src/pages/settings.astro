@@ -65,6 +65,31 @@ import { APP_NAME } from "../config";
 
         <div id="users-list" class="divide-y divide-gray-800"></div>
       </section>
+
+      <!-- Accounts -->
+      <section class="bg-gray-900 border border-gray-800 rounded-xl p-5 mt-6">
+        <h2 class="font-semibold text-lg text-gray-100 mb-1">Accounts</h2>
+        <p class="text-sm text-gray-500 mb-4">Rename an account, or archive one to hide it from the dashboard. Archiving keeps every transaction — you can restore it any time. Nothing is ever deleted here.</p>
+        <div id="accounts-list" class="divide-y divide-gray-800"></div>
+      </section>
+
+      <!-- Archived accounts -->
+      <section id="archived-section" class="hidden bg-gray-900 border border-gray-800 rounded-xl p-5 mt-6">
+        <h2 class="font-semibold text-lg text-gray-100 mb-1">Archived accounts</h2>
+        <p class="text-sm text-gray-500 mb-4">Restore an account to bring it back to the dashboard, or delete it permanently. <strong class="text-gray-400">Permanent deletion erases the account and all of its transactions and cannot be undone</strong> — you'll be asked to download a copy and to type the name first.</p>
+        <div id="archived-list" class="divide-y divide-gray-800"></div>
+      </section>
+
+      <!-- Data -->
+      <section class="bg-gray-900 border border-gray-800 rounded-xl p-5 mt-6">
+        <h2 class="font-semibold text-lg text-gray-100 mb-1">Your data</h2>
+        <p class="text-sm text-gray-500 mb-4">Download a copy of everything, any time. A full backup can be re-imported by the operator; the spreadsheet is for viewing in Excel or Google Sheets.</p>
+        <div class="flex flex-wrap gap-2">
+          <button id="export-json" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-200 text-sm hover:border-gray-600 transition-colors">Download full backup (JSON)</button>
+          <button id="export-csv" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-200 text-sm hover:border-gray-600 transition-colors">Download transactions (CSV)</button>
+          <span id="export-status" class="text-sm text-gray-500 self-center"></span>
+        </div>
+      </section>
     </div>
 
     <div id="denied" class="hidden text-center py-20">
@@ -76,7 +101,7 @@ import { APP_NAME } from "../config";
   <script>
     import { auth, db, functions } from "../lib/firebase";
     import { onAuthStateChanged } from "firebase/auth";
-    import { doc, getDoc, setDoc } from "firebase/firestore";
+    import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, orderBy } from "firebase/firestore";
     import { httpsCallable } from "firebase/functions";
 
     const el = (id: string) => document.getElementById(id)!;
@@ -84,6 +109,7 @@ import { APP_NAME } from "../config";
     const createUserFn = httpsCallable<{ email: string; password: string; role: string }, { uid: string }>(functions, "createUser");
     const setUserRoleFn = httpsCallable<{ uid: string; role: string }, { success: boolean }>(functions, "setUserRole");
     const deleteUserFn = httpsCallable<{ uid: string }, { success: boolean }>(functions, "deleteUser");
+    const deleteAccountFn = httpsCallable<{ id: string }, { success: boolean }>(functions, "deleteAccount");
 
     let myUid = "";
 
@@ -96,6 +122,7 @@ import { APP_NAME } from "../config";
       el("settings").classList.remove("hidden");
       await loadRate();
       await loadUsers();
+      await loadAccounts();
     });
 
     // ---- interest rate ----
@@ -190,6 +217,217 @@ import { APP_NAME } from "../config";
       } catch (err: any) {
         errEl.textContent = err?.message ?? "Could not create login.";
         errEl.classList.remove("hidden");
+      }
+    });
+
+    // ---- accounts: rename / archive / restore / permanent delete ----
+    function esc(s: string): string {
+      return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+    }
+    function fmtMoney(n: number): string {
+      return (n < 0 ? "-$" : "$") + Math.abs(Number(n) || 0).toFixed(2);
+    }
+
+    async function loadAccounts() {
+      const activeEl = el("accounts-list");
+      const archivedEl = el("archived-list");
+      activeEl.innerHTML = '<p class="text-gray-500 text-sm py-3">Loading…</p>';
+      const snap = await getDocs(query(collection(db, "accounts"), orderBy("order")));
+      const all = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const active = all.filter((a) => a.archived !== true);
+      const archived = all.filter((a) => a.archived === true);
+
+      // Active accounts: rename + archive.
+      activeEl.innerHTML = active.length ? "" : '<p class="text-gray-500 text-sm py-3">No active accounts.</p>';
+      for (const a of active) {
+        const name = a.name ?? a.id;
+        const row = document.createElement("div");
+        row.className = "flex items-center justify-between gap-3 py-3";
+        row.innerHTML = `
+          <input data-rename="${esc(a.id)}" class="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <div class="flex items-center gap-2 shrink-0">
+            <button data-save-name="${esc(a.id)}" class="text-emerald-400 hover:text-emerald-300 text-sm px-1">Save</button>
+            <button data-archive="${esc(a.id)}" class="text-gray-400 hover:text-gray-200 text-sm px-1">Archive</button>
+          </div>`;
+        (row.querySelector("input") as HTMLInputElement).value = name;
+        activeEl.appendChild(row);
+      }
+
+      // Archived accounts: restore + permanent delete.
+      const section = el("archived-section");
+      if (!archived.length) {
+        section.classList.add("hidden");
+      } else {
+        section.classList.remove("hidden");
+        archivedEl.innerHTML = "";
+        for (const a of archived) {
+          const name = a.name ?? a.id;
+          const row = document.createElement("div");
+          row.className = "flex items-center justify-between gap-3 py-3";
+          row.innerHTML = `
+            <div class="min-w-0">
+              <p class="text-gray-200 truncate">${esc(name)}</p>
+              <p class="text-xs text-gray-500">balance ${fmtMoney(a.currentBalance ?? 0)}</p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button data-restore="${esc(a.id)}" class="text-emerald-400 hover:text-emerald-300 text-sm px-1">Restore</button>
+              <button data-delete="${esc(a.id)}" class="text-red-400 hover:text-red-300 text-sm px-1">Delete permanently</button>
+            </div>`;
+          archivedEl.appendChild(row);
+        }
+      }
+
+      wireAccountButtons();
+    }
+
+    function wireAccountButtons() {
+      el("accounts-list").querySelectorAll<HTMLButtonElement>("button[data-save-name]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.saveName!;
+          const input = el("accounts-list").querySelector<HTMLInputElement>(`input[data-rename="${CSS.escape(id)}"]`)!;
+          const name = input.value.trim();
+          if (!name) { alert("Enter a name."); return; }
+          btn.disabled = true;
+          try {
+            await updateDoc(doc(db, "accounts", id), { name });
+            btn.textContent = "Saved";
+            setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 1500);
+          } catch (err: any) {
+            alert(err?.message ?? "Could not rename.");
+            btn.disabled = false;
+          }
+        });
+      });
+      el("accounts-list").querySelectorAll<HTMLButtonElement>("button[data-archive]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.archive!;
+          if (!confirm("Archive this account? It's hidden from the dashboard but keeps all its data, and you can restore it any time.")) return;
+          btn.disabled = true;
+          try {
+            await updateDoc(doc(db, "accounts", id), { archived: true });
+            await loadAccounts();
+          } catch (err: any) {
+            alert(err?.message ?? "Could not archive.");
+            btn.disabled = false;
+          }
+        });
+      });
+      el("archived-list").querySelectorAll<HTMLButtonElement>("button[data-restore]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.restore!;
+          btn.disabled = true;
+          try {
+            await updateDoc(doc(db, "accounts", id), { archived: false });
+            await loadAccounts();
+          } catch (err: any) {
+            alert(err?.message ?? "Could not restore.");
+            btn.disabled = false;
+          }
+        });
+      });
+      el("archived-list").querySelectorAll<HTMLButtonElement>("button[data-delete]").forEach((btn) => {
+        btn.addEventListener("click", () => permanentlyDelete(btn));
+      });
+    }
+
+    async function permanentlyDelete(btn: HTMLButtonElement) {
+      const id = btn.dataset.delete!;
+      const snap = await getDoc(doc(db, "accounts", id));
+      const name = (snap.exists() ? (snap.data().name as string) : null) ?? id;
+
+      // Offer a copy before anything irreversible happens.
+      if (confirm(`Download a backup of "${name}" first? OK = download, Cancel = skip.`)) {
+        await downloadAccount(id, name);
+      }
+      // Type-to-confirm.
+      const typed = prompt(`This permanently deletes "${name}" and ALL of its transactions. This cannot be undone.\n\nType the account name to confirm:`);
+      if (typed === null) return;
+      if (typed.trim() !== name) { alert("That didn't match the name — nothing was deleted."); return; }
+
+      btn.disabled = true;
+      try {
+        await deleteAccountFn({ id });
+        await loadAccounts();
+      } catch (err: any) {
+        alert(err?.message ?? "Could not delete.");
+        btn.disabled = false;
+      }
+    }
+
+    // ---- data export ----
+    function download(filename: string, text: string, mime: string) {
+      const blob = new Blob([text], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    const stamp = () => new Date().toISOString().slice(0, 10);
+
+    async function accountBackup(id: string) {
+      const accRef = doc(db, "accounts", id);
+      const accSnap = await getDoc(accRef);
+      const txSnap = await getDocs(query(collection(accRef, "transactions"), orderBy("date", "asc")));
+      const monthlySnap = await getDocs(query(collection(accRef, "monthly"), orderBy("__name__")));
+      return {
+        ...(accSnap.exists() ? accSnap.data() : {}),
+        transactions: txSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        monthly: monthlySnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      };
+    }
+
+    async function downloadAccount(id: string, name: string) {
+      const data = await accountBackup(id);
+      download(`${id}-${stamp()}.json`, JSON.stringify({ id, ...data }, null, 2), "application/json");
+    }
+
+    el("export-json").addEventListener("click", async (e) => {
+      const status = el("export-status");
+      status.textContent = "Preparing…";
+      try {
+        const accountsSnap = await getDocs(collection(db, "accounts"));
+        const accounts: Record<string, any> = {};
+        for (const acc of accountsSnap.docs) accounts[acc.id] = await accountBackup(acc.id);
+        const settings: Record<string, any> = {};
+        const interest = await getDoc(doc(db, "settings", "interest"));
+        if (interest.exists()) settings.interest = interest.data();
+        const backup = { exportedAt: new Date().toISOString(), accounts, settings };
+        download(`bank-backup-${stamp()}.json`, JSON.stringify(backup, null, 2), "application/json");
+        status.textContent = "";
+      } catch (err: any) {
+        status.textContent = err?.message ?? "Export failed.";
+      }
+    });
+
+    function csvCell(v: unknown): string {
+      const s = String(v ?? "");
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+
+    el("export-csv").addEventListener("click", async () => {
+      const status = el("export-status");
+      status.textContent = "Preparing…";
+      try {
+        const accountsSnap = await getDocs(query(collection(db, "accounts"), orderBy("order")));
+        const rows: string[][] = [["Account", "Date", "Type", "Amount", "Memo"]];
+        for (const acc of accountsSnap.docs) {
+          const name = (acc.data().name as string) ?? acc.id;
+          const txSnap = await getDocs(query(collection(acc.ref, "transactions"), orderBy("date", "asc")));
+          for (const t of txSnap.docs) {
+            const d = t.data() as any;
+            const date = d.date?.toDate ? d.date.toDate().toISOString().slice(0, 10) : "";
+            const amt = Number(d.amount ?? 0);
+            const signed = d.type === "deposit" ? amt : -amt;
+            rows.push([name, date, d.type ?? "", signed.toFixed(2), d.memo ?? ""]);
+          }
+        }
+        download(`bank-transactions-${stamp()}.csv`, rows.map((r) => r.map(csvCell).join(",")).join("\r\n"), "text/csv");
+        status.textContent = "";
+      } catch (err: any) {
+        status.textContent = err?.message ?? "Export failed.";
       }
     });
   </script>

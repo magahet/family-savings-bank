@@ -16,7 +16,11 @@ service cloud.firestore {
 
     match /accounts/{childId} {
       allow read: if isAdmin() || isChild();
-      allow write: if isAdmin();
+      // Create/update (add, rename, archive, reorder) is admin-only. Deletion is
+      // NOT allowed from a client — it goes through the deleteAccount function so
+      // the transactions/monthly subcollections are removed recursively too.
+      allow create, update: if isAdmin();
+      allow delete: if false;
 
       match /transactions/{txId} {
         allow read: if isAdmin() || isChild();

@@ -87,6 +87,19 @@ them even by calling the function directly.
 > ID token, so a user whose role you change must sign out and back in (or wait for
 > their token to refresh) before it applies.
 
+## Managing accounts in-app
+
+**Settings → Accounts** ([src/pages/settings.astro](../src/pages/settings.astro)) lets
+an admin rename an account or **archive** it (hide it from the dashboard while keeping
+all its data). Renames and the `archived` flag are ordinary admin writes allowed by the
+Firestore rules.
+
+Permanently deleting an account is deliberately harder — it removes the account and all
+its transactions and monthly snapshots, irreversibly. It's archive-first, export-offered,
+and type-to-confirm, and runs through the admin-gated `deleteAccount` function so the
+subcollections are removed recursively. See [data-safety.md](data-safety.md#deleting-an-account-from-the-app)
+for the full flow and guarantees.
+
 ## Command-line equivalents
 
 Everything above is also doable from the terminal for scripting or recovery — see

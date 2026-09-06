@@ -280,9 +280,12 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     async function loadDashboard() {
       const snap = await getDocs(query(collection(db, "accounts"), orderBy("order")));
       accountsGrid.innerHTML = "";
-      orderedIds = snap.docs.map((d) => d.id);
+      // Archived accounts are hidden here; they live in Settings → Accounts until
+      // they're restored or permanently deleted.
+      const docs = snap.docs.filter((d) => d.data().archived !== true);
+      orderedIds = docs.map((d) => d.id);
 
-      if (snap.empty) {
+      if (docs.length === 0) {
         accountsGrid.innerHTML = currentRole === "admin"
           ? '<p class="text-gray-500 col-span-full">No accounts yet — use “+ Add account” above to create one.</p>'
           : '<p class="text-gray-500 col-span-full">No accounts found.</p>';
@@ -290,7 +293,7 @@ import { APP_NAME, APP_TAGLINE } from "../config";
       }
 
       const isAdmin = currentRole === "admin";
-      snap.forEach((d, idx) => {
+      docs.forEach((d, idx) => {
         const data = d.data();
         const card = document.createElement("div");
         card.className = "block bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-600 transition-colors";
@@ -299,7 +302,7 @@ import { APP_NAME, APP_TAGLINE } from "../config";
         const reorder = isAdmin ? `
           <div class="flex gap-1">
             <button data-move="up" data-id="${d.id}" ${idx === 0 ? "disabled" : ""} class="text-gray-500 hover:text-gray-200 disabled:opacity-30 px-1" title="Move up">↑</button>
-            <button data-move="down" data-id="${d.id}" ${idx === snap.size - 1 ? "disabled" : ""} class="text-gray-500 hover:text-gray-200 disabled:opacity-30 px-1" title="Move down">↓</button>
+            <button data-move="down" data-id="${d.id}" ${idx === docs.length - 1 ? "disabled" : ""} class="text-gray-500 hover:text-gray-200 disabled:opacity-30 px-1" title="Move down">↓</button>
           </div>` : "";
         card.innerHTML = `
           <div class="flex items-center justify-between mb-3">
