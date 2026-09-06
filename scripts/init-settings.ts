@@ -3,8 +3,9 @@ import { getFirestore } from "firebase-admin/firestore";
 import { requireProjectId } from "./_env.js";
 
 // Initialize the global interest rate. Run once after first deploy.
-//   GCLOUD_PROJECT=<id> npx tsx scripts/init-settings.ts        (defaults to 2%)
-//   GCLOUD_PROJECT=<id> npx tsx scripts/init-settings.ts 0.03   (3% monthly)
+// Project ID comes from .firebaserc (override with GCLOUD_PROJECT=<id>).
+//   npx tsx scripts/init-settings.ts        (defaults to 2%)
+//   npx tsx scripts/init-settings.ts 0.03   (3% monthly)
 const rate = process.argv[2] !== undefined ? Number(process.argv[2]) : 0.02;
 
 if (!Number.isFinite(rate) || rate < 0 || rate > 1) {

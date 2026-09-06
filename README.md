@@ -172,6 +172,14 @@ This puts the app on the internet at `https://<your-project-id>.web.app`, with r
 
 > **Heads up — this requires a paid billing plan.** Firebase's free "Spark" plan cannot run Cloud Functions, which this app needs for interest and backups. You must switch to the **Blaze (pay-as-you-go)** plan (step 2). For a single family's use, the actual cost is typically **$0–$1/month** — Blaze includes a large free tier — but a credit card is required and you should [set a budget alert](https://cloud.google.com/billing/docs/how-to/budgets) for peace of mind.
 
+### Before you begin — install these tools
+
+The terminal steps below assume three command-line tools are installed. Install them once:
+
+- **[Node.js](https://nodejs.org) 22 or newer** — provides `node`, `npm`, and `npx` (used to install dependencies, build, and run the admin scripts). Verify with `node --version`.
+- **Firebase CLI** — `npm install -g firebase-tools` (used for `firebase login` and `npm run deploy`). Verify with `firebase --version`.
+- **[gcloud CLI](https://cloud.google.com/sdk/docs/install)** — the Google Cloud SDK, used once in [step 9](#step-9--authorize-the-admin-scripts) to authorize the admin scripts. Verify with `gcloud --version`.
+
 ### Step 1 — Create the Firebase project
 
 1. Go to the [Firebase Console](https://console.firebase.google.com) and sign in with a Google account.
@@ -242,41 +250,43 @@ npm run deploy
 
 This builds the site and deploys the security rules, database indexes, Cloud Functions, and hosting. The first functions deploy can take a few minutes and may ask permission to enable Google Cloud APIs — say yes. When it finishes it prints your live URL: `https://<your-project-id>.web.app`.
 
-### Step 9 — Set up credentials for the admin scripts
+### Step 9 — Set up your bank (in the browser)
 
-The remaining steps run small scripts that write to your project (creating your admin login, accounts, etc.). They need permission to act as your project. The simplest way:
+Everything else happens in the app — no more terminal commands.
 
-1. In the console: **gear → Project settings → Service accounts → Generate new private key.** This downloads a `.json` key file. **Keep it private — never commit it.**
-2. In your terminal, point the scripts at it (adjust the path):
-   ```bash
-   export GOOGLE_APPLICATION_CREDENTIALS="/full/path/to/serviceAccountKey.json"
-   export GCLOUD_PROJECT="your-project-id"
-   ```
-   These two lines apply to the current terminal session; set them again if you open a new terminal.
+1. Open your live URL: `https://<your-project-id>.web.app`.
+2. The first time you visit, it shows a **Set up your bank** screen. Enter an email and password for your **parent (admin) login** and click **Create admin & continue**. This one-time screen disappears the moment the first admin is claimed, so no one else can grab it later (see [docs/admin-model.md](docs/admin-model.md)).
+3. You're now signed in as the admin. Click **Settings** (top right) to:
+   - **Interest rate** — set the monthly rate (e.g. `2` for 2%).
+   - **Logins** — add your kids' logins and pick each one's role (`child` = read-only, `admin` = full access).
+4. Back on the dashboard, use **+ Add account** to create an account per child, and the ↑ / ↓ arrows to reorder them.
 
-### Step 10 — Create your parent (admin) login
+Then start adding transactions. Interest is applied automatically on the 1st of each month.
 
-1. In the console: **Authentication → Users → Add user.** Enter your email and a password.
-2. Grant yourself the admin role:
-   ```bash
-   npx tsx scripts/set-claims.ts you@example.com admin
-   ```
+> **Email/Password sign-in must be enabled** (Step 3) for the setup screen to work — it creates your admin login directly.
 
-### Step 11 — Set the interest rate and create accounts
+### Optional — command-line admin tools
+
+The setup above covers everything through the UI. For scripting or bulk edits there's also a set of Node scripts (create users, set the rate, create/reorder accounts, and edit transaction history via [`scripts/bank.ts`](scripts/bank.ts)). They authenticate with **Application Default Credentials** — one command, no key files:
 
 ```bash
-npx tsx scripts/init-settings.ts 0.02            # 2% monthly interest (change as you like)
-npx tsx scripts/create-account.ts alice "Alice"  # one command per child
-npx tsx scripts/create-account.ts bob "Bob"
+gcloud auth application-default login
 ```
 
-The account `id` (e.g. `alice`) appears in the URL; use lowercase, no spaces. To reorder the dashboard later: `npx tsx scripts/set-order.ts bob alice`.
+This opens a browser and stores credentials the scripts reuse. (Requires the [gcloud CLI](https://cloud.google.com/sdk/docs/install).) The scripts read your **Project ID** from `.firebaserc` automatically — no environment variables to set. Examples:
 
-### Step 12 — Open your bank
+```bash
+npx tsx scripts/create-user.ts kid@example.com "a-password" child   # add a login
+npx tsx scripts/init-settings.ts 0.02                               # set 2% monthly rate
+npx tsx scripts/create-account.ts alice "Alice"                     # create an account
+npx tsx scripts/bank.ts --help                                      # transaction history tools
+```
 
-Visit `https://<your-project-id>.web.app`, sign in with the parent login from step 10, and start adding transactions. Interest is applied automatically on the 1st of each month.
+> **Deleting or overwriting data always requires explicit approval.** These tools
+> preview changes and do nothing until you re-run with `--confirm`. See the policy
+> in [docs/data-safety.md](docs/data-safety.md).
 
-**Adding a child's read-only login (optional):** create another user in **Authentication → Add user**, then run `npx tsx scripts/set-claims.ts kid@example.com child`.
+> **Prefer a service-account key?** Download one (**gear → Project settings → Service accounts → Generate new private key**) and `export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`. Keep it private — never commit it. ADC above is simpler and recommended.
 
 ## Backups (optional)
 
@@ -342,11 +352,13 @@ sensor:
 
 ## Scripts
 
-Admin helpers that run against your live project. They need credentials — see [step 9](#step-9--set-up-credentials-for-the-admin-scripts) — then run with `npx tsx scripts/<name>.ts …`:
+Admin helpers that run against your live project. Authorize once with `gcloud auth application-default login` — see [step 9](#step-9--authorize-the-admin-scripts) — then run with `npx tsx scripts/<name>.ts …`. They read your Project ID from `.firebaserc`, so no environment variables are needed (set `GCLOUD_PROJECT` only to target a different project):
 
 | Script | Purpose |
 |--------|---------|
-| `set-claims.ts <email> <admin\|child>` | Grant a user the parent (admin) or child role. |
+| `bank.ts <command> …` | Read, search, analyze, and (guardedly) edit transaction history — see [Managing transactions from the CLI](#managing-transactions-from-the-cli). |
+| `create-user.ts <email> "<password>" <admin\|child>` | Create (or reuse) a login and grant it the parent (admin) or child role, in one step. |
+| `set-claims.ts <email> <admin\|child>` | Grant an **existing** user the parent (admin) or child role. |
 | `init-settings.ts [rate]` | Set the global monthly interest rate (default `0.02`). |
 | `create-account.ts <id> "<Name>"` | Create a child account with zeroed balances. |
 | `set-order.ts [ids…]` | Set dashboard sort order (alphabetical by name if no IDs given). |
@@ -354,6 +366,30 @@ Admin helpers that run against your live project. They need credentials — see 
 | `seed-emulator.ts` | Seed the local emulator with a test admin and sample accounts (emulator only). |
 
 > One-off, instance-specific scripts (data imports, ad-hoc comparisons) live in `scripts/local/`, and personal data files in `data/` — both gitignored.
+
+### Managing transactions from the CLI
+
+`scripts/bank.ts` is a single tool for working with transaction history — designed to be safe enough to hand to an AI agent. It reads, searches, and analyzes freely; **writes are dry-run by default** and print the exact change plus its projected balance impact (an independent from-zero replay), committing only when you add `--confirm`. Writes only ever touch the `transactions` subcollection — the deployed `onTransaction*` trigger recomputes snapshots and cached totals automatically, so derived data is never edited by hand.
+
+The target project comes from `.firebaserc` and all date math is done in UTC internally (matching the Cloud Functions — see [validation](#validating-a-balance)), so there are no env vars or timezone flags to remember:
+
+```bash
+npx tsx scripts/bank.ts <command> [args] [--flags]
+```
+
+| Command | Purpose |
+|---------|---------|
+| `accounts` | List accounts with balances and lifetime totals. |
+| `list <account>` | List transactions (newest first). Filters: `--type`, `--from`, `--to`, `--search <regex>`, `--limit`, `--order`. |
+| `find <account> <regex>` | Case-insensitive memo search. |
+| `show <account> <txId>` | Show one transaction. |
+| `stats <account>` | Sums/counts by type, totals by year, and an independently replayed balance (accepts the same filters as `list`). |
+| `contribution <account> <txId>` | How much compounded interest a single deposit has earned, using the historical monthly rates. |
+| `add <account> --type T --amount N --date YYYY-MM-DD [--memo "…"]` | Add a transaction (dry-run unless `--confirm`). |
+| `edit <account> <txId> [--type] [--amount] [--date] [--memo]` | Edit fields (dry-run unless `--confirm`). |
+| `delete <account> <txId>` | Delete a transaction (dry-run unless `--confirm`). |
+
+Add `--json` to any command for machine-readable output. Amounts are always positive; the sign is implied by `--type` (`deposit` / `withdrawal` / `fine`).
 
 ## Project Structure
 

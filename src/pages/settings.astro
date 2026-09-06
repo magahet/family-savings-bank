@@ -1,0 +1,191 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { APP_NAME } from "../config";
+---
+
+<Layout title="Settings">
+  <main class="max-w-2xl mx-auto p-6">
+    <div id="loading" class="text-center py-20"><p class="text-gray-500">Loading...</p></div>
+
+    <div id="settings" class="hidden">
+      <header class="flex items-center justify-between mb-8">
+        <div>
+          <h1 class="text-2xl font-bold text-emerald-400">Settings</h1>
+          <p class="text-sm text-gray-500">{APP_NAME}</p>
+        </div>
+        <a href="/" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">← Dashboard</a>
+      </header>
+
+      <!-- Interest rate -->
+      <section class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+        <h2 class="font-semibold text-lg text-gray-100 mb-1">Interest rate</h2>
+        <p class="text-sm text-gray-500 mb-4">The global monthly rate, applied on the 1st. Changing it here affects future months only; already-recorded months keep the rate they were stamped with.</p>
+        <form id="rate-form" class="flex flex-wrap items-end gap-2">
+          <div>
+            <label for="rate" class="block text-xs text-gray-500 mb-1">Monthly rate (%)</label>
+            <input id="rate" type="number" step="0.01" min="0" max="100"
+              class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <button type="submit" class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-emerald-500 transition-colors">Save</button>
+          <span id="rate-status" class="text-sm text-gray-500"></span>
+        </form>
+      </section>
+
+      <!-- Users -->
+      <section class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h2 class="font-semibold text-lg text-gray-100 mb-1">Logins</h2>
+        <p class="text-sm text-gray-500 mb-4">Parents (admin) have full read/write. Children are read-only. A role change takes effect after the user signs out and back in.</p>
+
+        <form id="add-user-form" class="flex flex-wrap items-end gap-2 mb-5">
+          <div>
+            <label for="u-email" class="block text-xs text-gray-500 mb-1">Email</label>
+            <input id="u-email" type="email" placeholder="kid@example.com"
+              class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label for="u-password" class="block text-xs text-gray-500 mb-1">Password</label>
+            <input id="u-password" type="text" placeholder="min 6 chars"
+              class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label for="u-role" class="block text-xs text-gray-500 mb-1">Role</label>
+            <select id="u-role" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="child">child</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+          <button type="submit" class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-emerald-500 transition-colors">Add login</button>
+          <p id="add-user-error" class="w-full text-red-400 text-sm hidden"></p>
+        </form>
+
+        <div id="users-list" class="divide-y divide-gray-800"></div>
+      </section>
+    </div>
+
+    <div id="denied" class="hidden text-center py-20">
+      <p class="text-gray-400 mb-6">Admins only.</p>
+      <a href="/" class="text-emerald-400 hover:text-emerald-300">← Back to dashboard</a>
+    </div>
+  </main>
+
+  <script>
+    import { auth, db, functions } from "../lib/firebase";
+    import { onAuthStateChanged } from "firebase/auth";
+    import { doc, getDoc, setDoc } from "firebase/firestore";
+    import { httpsCallable } from "firebase/functions";
+
+    const el = (id: string) => document.getElementById(id)!;
+    const listUsersFn = httpsCallable<unknown, { users: { uid: string; email?: string; role: string | null; disabled: boolean }[] }>(functions, "listUsers");
+    const createUserFn = httpsCallable<{ email: string; password: string; role: string }, { uid: string }>(functions, "createUser");
+    const setUserRoleFn = httpsCallable<{ uid: string; role: string }, { success: boolean }>(functions, "setUserRole");
+    const deleteUserFn = httpsCallable<{ uid: string }, { success: boolean }>(functions, "deleteUser");
+
+    let myUid = "";
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { window.location.href = "/"; return; }
+      myUid = user.uid;
+      const token = await user.getIdTokenResult();
+      el("loading").classList.add("hidden");
+      if (token.claims.role !== "admin") { el("denied").classList.remove("hidden"); return; }
+      el("settings").classList.remove("hidden");
+      await loadRate();
+      await loadUsers();
+    });
+
+    // ---- interest rate ----
+    async function loadRate() {
+      const snap = await getDoc(doc(db, "settings", "interest"));
+      const rate = snap.exists() ? (snap.data().defaultRate as number) : 0.02;
+      (el("rate") as HTMLInputElement).value = (rate * 100).toString();
+    }
+    el("rate-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = el("rate-status");
+      const pct = Number((el("rate") as HTMLInputElement).value);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        status.textContent = "Enter a percentage between 0 and 100.";
+        return;
+      }
+      status.textContent = "Saving…";
+      await setDoc(doc(db, "settings", "interest"), { defaultRate: pct / 100 });
+      status.textContent = "Saved.";
+      setTimeout(() => (status.textContent = ""), 2000);
+    });
+
+    // ---- users ----
+    async function loadUsers() {
+      const list = el("users-list");
+      list.innerHTML = '<p class="text-gray-500 text-sm py-3">Loading logins…</p>';
+      try {
+        const { users } = (await listUsersFn()).data;
+        list.innerHTML = "";
+        users.sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
+        for (const u of users) {
+          const row = document.createElement("div");
+          row.className = "flex items-center justify-between gap-3 py-3";
+          const isSelf = u.uid === myUid;
+          row.innerHTML = `
+            <div class="min-w-0">
+              <p class="text-gray-200 truncate">${u.email ?? "(no email)"}${isSelf ? ' <span class="text-xs text-gray-500">(you)</span>' : ""}</p>
+              <p class="text-xs text-gray-500">${u.role ?? "no role"}</p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <select data-role-for="${u.uid}" class="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-gray-100 text-xs">
+                <option value="child" ${u.role === "child" ? "selected" : ""}>child</option>
+                <option value="admin" ${u.role === "admin" ? "selected" : ""}>admin</option>
+              </select>
+              <button data-del="${u.uid}" ${isSelf ? "disabled" : ""} class="text-red-400 hover:text-red-300 disabled:opacity-30 text-sm px-1" title="Delete login">✕</button>
+            </div>`;
+          list.appendChild(row);
+        }
+        list.querySelectorAll<HTMLSelectElement>("select[data-role-for]").forEach((sel) => {
+          sel.addEventListener("change", async () => {
+            sel.disabled = true;
+            try {
+              await setUserRoleFn({ uid: sel.dataset.roleFor!, role: sel.value });
+              await loadUsers();
+            } catch (err: any) {
+              alert(err?.message ?? "Could not change role.");
+              sel.disabled = false;
+              await loadUsers();
+            }
+          });
+        });
+        list.querySelectorAll<HTMLButtonElement>("button[data-del]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const uid = btn.dataset.del!;
+            if (!confirm("Delete this login? This cannot be undone.")) return;
+            btn.disabled = true;
+            try {
+              await deleteUserFn({ uid });
+              await loadUsers();
+            } catch (err: any) {
+              alert(err?.message ?? "Could not delete login.");
+              btn.disabled = false;
+            }
+          });
+        });
+      } catch (err: any) {
+        list.innerHTML = `<p class="text-red-400 text-sm py-3">${err?.message ?? "Could not load logins."}</p>`;
+      }
+    }
+
+    el("add-user-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errEl = el("add-user-error");
+      errEl.classList.add("hidden");
+      const email = (el("u-email") as HTMLInputElement).value.trim();
+      const password = (el("u-password") as HTMLInputElement).value;
+      const role = (el("u-role") as HTMLSelectElement).value;
+      try {
+        await createUserFn({ email, password, role });
+        (el("add-user-form") as HTMLFormElement).reset();
+        await loadUsers();
+      } catch (err: any) {
+        errEl.textContent = err?.message ?? "Could not create login.";
+        errEl.classList.remove("hidden");
+      }
+    });
+  </script>
+</Layout>

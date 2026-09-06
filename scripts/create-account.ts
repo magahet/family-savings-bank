@@ -3,14 +3,15 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { requireProjectId } from "./_env.js";
 
 // Create a child account with zeroed balances.
-//   GCLOUD_PROJECT=<id> npx tsx scripts/create-account.ts alice "Alice"
+//   npx tsx scripts/create-account.ts alice "Alice"
+// Project ID comes from .firebaserc (override with GCLOUD_PROJECT=<id>).
 // The id is used in the URL and must be lowercase, no spaces (e.g. "alice").
 const id = process.argv[2];
 const name = process.argv[3];
 
 if (!id || !name || !/^[a-z0-9-]+$/.test(id)) {
   console.error(
-    'Usage: GCLOUD_PROJECT=<project-id> npx tsx scripts/create-account.ts <id> "<Name>"\n' +
+    'Usage: npx tsx scripts/create-account.ts <id> "<Name>"\n' +
       "  <id> must be lowercase letters, numbers, or hyphens (e.g. alice)."
   );
   process.exit(1);

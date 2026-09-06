@@ -8,6 +8,32 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     <div id="loading" class="text-center py-20">
       <p class="text-gray-500">Loading...</p>
     </div>
+
+    <!-- First-run: no admin exists yet. Create the owner login. -->
+    <div id="setup" class="hidden max-w-sm mx-auto py-20">
+      <h1 class="text-3xl font-bold mb-2 text-center text-emerald-400">{APP_NAME}</h1>
+      <p class="text-center text-gray-500 mb-2 text-sm">Set up your bank</p>
+      <p class="text-center text-gray-500 mb-8 text-sm">Create the administrator login. This one-time step is only available until the first admin is set.</p>
+      <form id="setup-form" class="space-y-4">
+        <div>
+          <label for="setup-email" class="block text-sm font-medium mb-1 text-gray-300">Email</label>
+          <input type="email" id="setup-email" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+        </div>
+        <div>
+          <label for="setup-password" class="block text-sm font-medium mb-1 text-gray-300">Password</label>
+          <input type="password" id="setup-password" required minlength="6"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+          <p class="text-xs text-gray-600 mt-1">At least 6 characters.</p>
+        </div>
+        <p id="setup-error" class="text-red-400 text-sm hidden"></p>
+        <button type="submit"
+          class="w-full bg-emerald-600 text-white rounded-lg px-4 py-2.5 font-medium hover:bg-emerald-500 transition-colors">
+          Create admin & continue
+        </button>
+      </form>
+    </div>
+
     <div id="login" class="hidden max-w-sm mx-auto py-20">
       <h1 class="text-3xl font-bold mb-2 text-center text-emerald-400">{APP_NAME}</h1>
       <p class="text-center text-gray-500 mb-8 text-sm">{APP_TAGLINE}</p>
@@ -32,52 +58,162 @@ import { APP_NAME, APP_TAGLINE } from "../config";
         Forgot password?
       </a>
     </div>
+
+    <!-- Signed in but no role assigned. -->
+    <div id="norole" class="hidden max-w-sm mx-auto py-20 text-center">
+      <p class="text-gray-400 mb-6">Your account doesn't have access yet.</p>
+      <div id="claim-wrap" class="hidden">
+        <p class="text-gray-500 text-sm mb-4">This bank has no administrator yet. Claim ownership to become the admin.</p>
+        <button id="claim-btn"
+          class="bg-emerald-600 text-white rounded-lg px-4 py-2.5 font-medium hover:bg-emerald-500 transition-colors">
+          Claim ownership
+        </button>
+        <p id="claim-error" class="text-red-400 text-sm mt-3 hidden"></p>
+      </div>
+      <p id="norole-contact" class="hidden text-gray-500 text-sm">Ask an administrator to grant you access, then sign out and back in.</p>
+      <button id="norole-logout" class="block mx-auto text-sm text-gray-500 hover:text-gray-300 mt-8 transition-colors">Sign Out</button>
+    </div>
+
     <div id="dashboard" class="hidden">
       <header class="flex items-center justify-between mb-8">
         <div>
           <h1 class="text-2xl font-bold text-emerald-400">{APP_NAME}</h1>
           <p class="text-sm text-gray-500">{APP_TAGLINE}</p>
         </div>
-        <button id="logout-btn" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">Sign Out</button>
+        <div class="flex items-center gap-4">
+          <a id="settings-link" href="/settings" class="hidden text-sm text-gray-500 hover:text-gray-300 transition-colors">Settings</a>
+          <button id="logout-btn" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">Sign Out</button>
+        </div>
       </header>
+
+      <div id="admin-bar" class="hidden mb-4">
+        <button id="add-account-btn"
+          class="text-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-200 hover:border-gray-600 transition-colors">+ Add account</button>
+        <form id="add-account-form" class="hidden mt-3 flex flex-wrap gap-2 items-end bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div>
+            <label for="acct-id" class="block text-xs text-gray-500 mb-1">ID (lowercase, no spaces)</label>
+            <input id="acct-id" placeholder="alice"
+              class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label for="acct-name" class="block text-xs text-gray-500 mb-1">Name</label>
+            <input id="acct-name" placeholder="Alice"
+              class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <button type="submit" class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-emerald-500 transition-colors">Create</button>
+          <button type="button" id="add-account-cancel" class="text-gray-500 text-sm px-2 hover:text-gray-300">Cancel</button>
+          <p id="add-account-error" class="w-full text-red-400 text-sm hidden"></p>
+        </form>
+      </div>
+
       <div id="accounts-grid" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       </div>
     </div>
   </main>
 
   <script>
-    import { auth, db } from "../lib/firebase";
-    import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-    import { collection, getDocs, query, orderBy } from "firebase/firestore";
+    import { auth, db, functions } from "../lib/firebase";
+    import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+    import { collection, getDocs, setDoc, doc, updateDoc, query, orderBy, Timestamp } from "firebase/firestore";
+    import { httpsCallable } from "firebase/functions";
 
-    const loadingEl = document.getElementById("loading")!;
-    const loginEl = document.getElementById("login")!;
-    const dashboardEl = document.getElementById("dashboard")!;
-    const loginForm = document.getElementById("login-form") as HTMLFormElement;
-    const loginError = document.getElementById("login-error")!;
-    const logoutBtn = document.getElementById("logout-btn")!;
-    const accountsGrid = document.getElementById("accounts-grid")!;
+    const el = (id: string) => document.getElementById(id)!;
+    const loadingEl = el("loading");
+    const setupEl = el("setup");
+    const loginEl = el("login");
+    const noroleEl = el("norole");
+    const dashboardEl = el("dashboard");
+    const accountsGrid = el("accounts-grid");
+    const adminBar = el("admin-bar");
+    const settingsLink = el("settings-link");
 
-    function show(el: HTMLElement) { el.classList.remove("hidden"); }
-    function hide(el: HTMLElement) { el.classList.add("hidden"); }
+    const setupForm = el("setup-form") as HTMLFormElement;
+    const setupError = el("setup-error");
+    const loginForm = el("login-form") as HTMLFormElement;
+    const loginError = el("login-error");
+
+    const needsSetupFn = httpsCallable<unknown, { needsSetup: boolean }>(functions, "needsSetup");
+    const bootstrapFn = httpsCallable<unknown, { success: boolean }>(functions, "bootstrapFirstAdmin");
+
+    function show(e: HTMLElement) { e.classList.remove("hidden"); }
+    function hide(e: HTMLElement) { e.classList.add("hidden"); }
+    function only(target: HTMLElement) {
+      for (const e of [setupEl, loginEl, noroleEl, dashboardEl]) e === target ? show(e) : hide(e);
+    }
+
+    let currentRole: string | null = null;
 
     onAuthStateChanged(auth, async (user) => {
       hide(loadingEl);
-      if (user) {
-        hide(loginEl);
-        show(dashboardEl);
+      if (!user) {
+        currentRole = null;
+        const setup = await isSetupNeeded();
+        only(setup ? setupEl : loginEl);
+        return;
+      }
+      const token = await user.getIdTokenResult();
+      currentRole = (token.claims.role as string) ?? null;
+      if (currentRole === "admin" || currentRole === "child") {
+        only(dashboardEl);
+        adminBar.classList.toggle("hidden", currentRole !== "admin");
+        settingsLink.classList.toggle("hidden", currentRole !== "admin");
         await loadDashboard();
       } else {
-        show(loginEl);
-        hide(dashboardEl);
+        // Signed in but unclaimed: offer ownership if the bank still needs setup.
+        only(noroleEl);
+        const setup = await isSetupNeeded();
+        el("claim-wrap").classList.toggle("hidden", !setup);
+        el("norole-contact").classList.toggle("hidden", setup);
+      }
+    });
+
+    async function isSetupNeeded(): Promise<boolean> {
+      try {
+        return (await needsSetupFn()).data.needsSetup;
+      } catch {
+        return false;
+      }
+    }
+
+    async function refreshAndReload() {
+      await auth.currentUser?.getIdToken(true); // pull the new custom claim
+      const token = await auth.currentUser?.getIdTokenResult();
+      currentRole = (token?.claims.role as string) ?? null;
+      only(dashboardEl);
+      adminBar.classList.toggle("hidden", currentRole !== "admin");
+      settingsLink.classList.toggle("hidden", currentRole !== "admin");
+      await loadDashboard();
+    }
+
+    setupForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hide(setupError);
+      const email = (el("setup-email") as HTMLInputElement).value.trim();
+      const password = (el("setup-password") as HTMLInputElement).value;
+      try {
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+        } catch (err: any) {
+          // If the login was pre-created (e.g. in the console), just sign in.
+          if (err?.code === "auth/email-already-in-use") {
+            await signInWithEmailAndPassword(auth, email, password);
+          } else {
+            throw err;
+          }
+        }
+        await bootstrapFn();
+        await refreshAndReload();
+      } catch (err: any) {
+        setupError.textContent = err?.message ?? "Setup failed.";
+        show(setupError);
       }
     });
 
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       hide(loginError);
-      const email = (document.getElementById("email") as HTMLInputElement).value;
-      const password = (document.getElementById("password") as HTMLInputElement).value;
+      const email = (el("email") as HTMLInputElement).value;
+      const password = (el("password") as HTMLInputElement).value;
       try {
         await signInWithEmailAndPassword(auth, email, password);
       } catch (err: any) {
@@ -86,7 +222,63 @@ import { APP_NAME, APP_TAGLINE } from "../config";
       }
     });
 
-    logoutBtn.addEventListener("click", () => signOut(auth));
+    el("claim-btn").addEventListener("click", async () => {
+      hide(el("claim-error"));
+      try {
+        await bootstrapFn();
+        await refreshAndReload();
+      } catch (err: any) {
+        el("claim-error").textContent = err?.message ?? "Could not claim ownership.";
+        show(el("claim-error"));
+      }
+    });
+
+    el("logout-btn").addEventListener("click", () => signOut(auth));
+    el("norole-logout").addEventListener("click", () => signOut(auth));
+
+    // ---- admin: add / reorder accounts ----
+    const addForm = el("add-account-form") as HTMLFormElement;
+    el("add-account-btn").addEventListener("click", () => addForm.classList.toggle("hidden"));
+    el("add-account-cancel").addEventListener("click", () => addForm.classList.add("hidden"));
+
+    addForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hide(el("add-account-error"));
+      const id = (el("acct-id") as HTMLInputElement).value.trim().toLowerCase();
+      const name = (el("acct-name") as HTMLInputElement).value.trim();
+      if (!/^[a-z0-9-]+$/.test(id) || !name) {
+        el("add-account-error").textContent = "ID must be lowercase letters/numbers/hyphens; name is required.";
+        show(el("add-account-error"));
+        return;
+      }
+      const existing = await getDocs(collection(db, "accounts"));
+      if (existing.docs.some((d) => d.id === id)) {
+        el("add-account-error").textContent = `Account "${id}" already exists.`;
+        show(el("add-account-error"));
+        return;
+      }
+      await setDoc(doc(db, "accounts", id), {
+        name, order: existing.size, rateOverride: null,
+        currentBalance: 0, totalInterest: 0, totalDeposits: 0, totalWithdrawals: 0, totalFines: 0,
+        lastComputedAt: Timestamp.now(),
+      });
+      addForm.reset();
+      addForm.classList.add("hidden");
+      await loadDashboard();
+    });
+
+    let orderedIds: string[] = [];
+    async function move(id: string, dir: -1 | 1) {
+      const i = orderedIds.indexOf(id);
+      const j = i + dir;
+      if (j < 0 || j >= orderedIds.length) return;
+      const other = orderedIds[j];
+      await Promise.all([
+        updateDoc(doc(db, "accounts", id), { order: j }),
+        updateDoc(doc(db, "accounts", other), { order: i }),
+      ]);
+      await loadDashboard();
+    }
 
     function fmtMoney(n: number): string {
       const abs = Math.abs(n);
@@ -99,40 +291,46 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     async function loadDashboard() {
       const snap = await getDocs(query(collection(db, "accounts"), orderBy("order")));
       accountsGrid.innerHTML = "";
+      orderedIds = snap.docs.map((d) => d.id);
 
       if (snap.empty) {
-        accountsGrid.innerHTML = '<p class="text-gray-500 col-span-full">No accounts found.</p>';
+        accountsGrid.innerHTML = currentRole === "admin"
+          ? '<p class="text-gray-500 col-span-full">No accounts yet — use “+ Add account” above to create one.</p>'
+          : '<p class="text-gray-500 col-span-full">No accounts found.</p>';
         return;
       }
 
-      snap.forEach((doc) => {
-        const data = doc.data();
-        const card = document.createElement("a");
-        card.href = `/account?id=${doc.id}`;
+      const isAdmin = currentRole === "admin";
+      snap.forEach((d, idx) => {
+        const data = d.data();
+        const card = document.createElement("div");
         card.className = "block bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-600 transition-colors";
         const balance = (data.currentBalance ?? 0);
         const balanceColor = balance < 0 ? 'text-red-400' : 'text-emerald-400';
+        const reorder = isAdmin ? `
+          <div class="flex gap-1">
+            <button data-move="up" data-id="${d.id}" ${idx === 0 ? "disabled" : ""} class="text-gray-500 hover:text-gray-200 disabled:opacity-30 px-1" title="Move up">↑</button>
+            <button data-move="down" data-id="${d.id}" ${idx === snap.size - 1 ? "disabled" : ""} class="text-gray-500 hover:text-gray-200 disabled:opacity-30 px-1" title="Move down">↓</button>
+          </div>` : "";
         card.innerHTML = `
           <div class="flex items-center justify-between mb-3">
-            <h2 class="font-semibold text-lg text-gray-100">${data.name}</h2>
+            <a href="/account?id=${d.id}" class="font-semibold text-lg text-gray-100 hover:text-emerald-400 transition-colors">${data.name}</a>
+            ${reorder}
           </div>
-          <p class="text-3xl font-bold tabular-nums ${balanceColor} mb-3">${fmtMoney(balance)}</p>
-          <div class="grid grid-cols-3 gap-2 text-xs">
-            <div>
-              <p class="text-gray-500">Interest</p>
-              <p class="text-gray-300 tabular-nums">${fmtMoney(data.totalInterest ?? 0)}</p>
+          <a href="/account?id=${d.id}" class="block">
+            <p class="text-3xl font-bold tabular-nums ${balanceColor} mb-3">${fmtMoney(balance)}</p>
+            <div class="grid grid-cols-3 gap-2 text-xs">
+              <div><p class="text-gray-500">Interest</p><p class="text-gray-300 tabular-nums">${fmtMoney(data.totalInterest ?? 0)}</p></div>
+              <div><p class="text-gray-500">Deposits</p><p class="text-gray-300 tabular-nums">${fmtMoney(data.totalDeposits ?? 0)}</p></div>
+              <div><p class="text-gray-500">Fines</p><p class="text-red-400 tabular-nums">${fmtMoney(data.totalFines ?? 0)}</p></div>
             </div>
-            <div>
-              <p class="text-gray-500">Deposits</p>
-              <p class="text-gray-300 tabular-nums">${fmtMoney(data.totalDeposits ?? 0)}</p>
-            </div>
-            <div>
-              <p class="text-gray-500">Fines</p>
-              <p class="text-red-400 tabular-nums">${fmtMoney(data.totalFines ?? 0)}</p>
-            </div>
-          </div>
+          </a>
         `;
         accountsGrid.appendChild(card);
+      });
+
+      accountsGrid.querySelectorAll<HTMLButtonElement>("button[data-move]").forEach((btn) => {
+        btn.addEventListener("click", () => move(btn.dataset.id!, btn.dataset.move === "up" ? -1 : 1));
       });
     }
   </script>
