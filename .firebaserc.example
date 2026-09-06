@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "your-project-id"
+  },
+  "targets": {
+    "your-project-id": {
+      "hosting": {
+        "app": [
+          "your-site-id"
+        ]
+      }
+    }
   }
 }

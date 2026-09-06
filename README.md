@@ -216,7 +216,18 @@ npm --prefix functions install
 cp .firebaserc.example .firebaserc
 ```
 
-Open `.firebaserc` in a text editor and replace `your-project-id` with your actual Project ID from step 1.
+Open `.firebaserc` in a text editor:
+
+- Replace **both** `your-project-id` entries with your actual Project ID from step 1.
+- Replace `your-site-id` with the Hosting **site** you want to deploy to. Every project has a default site whose ID equals the Project ID, so if you just want `https://<your-project-id>.web.app`, set `your-site-id` to your Project ID. To get a friendlier URL like `https://smith-bank.web.app`, create an extra site first (site IDs are globally unique):
+
+  ```bash
+  firebase hosting:sites:create smith-bank   # → https://smith-bank.web.app
+  ```
+
+  then set `your-site-id` to `smith-bank`. The `app` target in `.firebaserc` maps this repo's shared `firebase.json` to whichever site this instance deploys to.
+
+> If you add an extra site, also add its domain (e.g. `smith-bank.web.app`) under **Authentication → Settings → Authorized domains**, or sign-in will be blocked there.
 
 ### Step 6 — Add your configuration
 
@@ -248,7 +259,7 @@ firebase functions:secrets:set API_KEY
 npm run deploy
 ```
 
-This builds the site and deploys the security rules, database indexes, Cloud Functions, and hosting. The first functions deploy can take a few minutes and may ask permission to enable Google Cloud APIs — say yes. When it finishes it prints your live URL: `https://<your-project-id>.web.app`.
+This builds the site and deploys the security rules, database indexes, Cloud Functions, and hosting to the site your `app` target points at. The first functions deploy can take a few minutes and may ask permission to enable Google Cloud APIs — say yes. When it finishes it prints your live URL: `https://<your-site-id>.web.app`.
 
 ### Step 9 — Harden and set up your bank
 
