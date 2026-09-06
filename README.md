@@ -170,6 +170,8 @@ For a single family, expect **$0–$1/month** — effectively free. The app is t
 
 This puts the app on the internet at `https://<your-project-id>.web.app`, with real accounts and automatic monthly interest. Follow the steps in order. Most of it is clicking through the Firebase website; a few steps are copy-paste terminal commands.
 
+> **Already running an instance and pulling newer code?** Don't re-run setup — see [docs/upgrading.md](docs/upgrading.md) for the one-time action each change needs (e.g. mapping the Hosting deploy target before your next deploy).
+
 > **Heads up — this requires a paid billing plan.** Firebase's free "Spark" plan cannot run Cloud Functions, which this app needs for interest and backups. You must switch to the **Blaze (pay-as-you-go)** plan (step 2). For a single family's use, the actual cost is typically **$0–$1/month** — Blaze includes a large free tier — but a credit card is required and you should [set a budget alert](https://cloud.google.com/billing/docs/how-to/budgets) for peace of mind.
 
 ### Before you begin — install these tools
