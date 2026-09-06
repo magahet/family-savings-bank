@@ -245,6 +245,10 @@ cp .env.example .env
   PUBLIC_APP_SHORT_NAME="Smith Bank"
   PUBLIC_APP_TAGLINE="Family Savings Tracker"
   ```
+  These are the **defaults** and the name used by the installed PWA. Once you're
+  signed in, an admin can rename the bank and its tagline at any time from
+  **Settings → App name** (stored in `settings/app`, applied instantly) without
+  redeploying — so setting `.env` is optional.
 
 ### Step 7 — Log in and set the API secret
 
@@ -288,6 +292,7 @@ for why this is safe).
    **parent (admin) login** and click **Create admin & continue**. Only that email
    works, and the screen self-locks the moment the first admin is claimed.
 4. You're now signed in as the admin. Click **Settings** (top right) to:
+   - **App name** — rename the bank and its tagline (shown in the header, sign-in screen, and browser tab).
    - **Interest rate** — set the monthly rate (e.g. `2` for 2%).
    - **Logins** — add your kids' logins and pick each one's role (`child` = read-only, `admin` = full access).
    - **Accounts** — rename or archive an account, restore or permanently delete an archived one (archive-first and type-to-confirm; see [data-safety.md](docs/data-safety.md#deleting-an-account-from-the-app)).

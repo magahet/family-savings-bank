@@ -12,7 +12,7 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     <!-- First-run: no admin exists yet. Only the operator-authorized owner email
          can create the admin login here (see scripts/set-owner.ts). -->
     <div id="setup" class="hidden max-w-sm mx-auto py-20">
-      <h1 class="text-3xl font-bold mb-2 text-center text-emerald-400">{APP_NAME}</h1>
+      <h1 data-app-name class="text-3xl font-bold mb-2 text-center text-emerald-400">{APP_NAME}</h1>
       <p class="text-center text-gray-500 mb-2 text-sm">Set up your bank</p>
       <!-- Shown when the operator hasn't authorized an owner email yet. -->
       <div id="setup-closed" class="hidden text-center text-gray-500 text-sm mt-6 space-y-2">
@@ -42,8 +42,8 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     </div>
 
     <div id="login" class="hidden max-w-sm mx-auto py-20">
-      <h1 class="text-3xl font-bold mb-2 text-center text-emerald-400">{APP_NAME}</h1>
-      <p class="text-center text-gray-500 mb-8 text-sm">{APP_TAGLINE}</p>
+      <h1 data-app-name class="text-3xl font-bold mb-2 text-center text-emerald-400">{APP_NAME}</h1>
+      <p data-app-tagline class="text-center text-gray-500 mb-8 text-sm">{APP_TAGLINE}</p>
       <form id="login-form" class="space-y-4">
         <div>
           <label for="email" class="block text-sm font-medium mb-1 text-gray-300">Email</label>
@@ -76,8 +76,8 @@ import { APP_NAME, APP_TAGLINE } from "../config";
     <div id="dashboard" class="hidden">
       <header class="flex items-center justify-between mb-8">
         <div>
-          <h1 class="text-2xl font-bold text-emerald-400">{APP_NAME}</h1>
-          <p class="text-sm text-gray-500">{APP_TAGLINE}</p>
+          <h1 data-app-name class="text-2xl font-bold text-emerald-400">{APP_NAME}</h1>
+          <p data-app-tagline class="text-sm text-gray-500">{APP_TAGLINE}</p>
         </div>
         <div class="flex items-center gap-4">
           <a id="settings-link" href="/settings" class="hidden text-sm text-gray-500 hover:text-gray-300 transition-colors">Settings</a>

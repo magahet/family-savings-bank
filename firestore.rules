@@ -33,6 +33,13 @@ service cloud.firestore {
       }
     }
 
+    // App branding (name + tagline). Shown on the sign-in screen too, so it's
+    // world-readable; it isn't secret. Only an admin can change it.
+    match /settings/app {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // The interest rate is read by the client (rate display / next-interest estimate).
     match /settings/interest {
       allow read: if isAdmin() || isChild();

@@ -17,9 +17,13 @@ import { APP_NAME } from "../config";
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#059669" />
-    <title>{title} | {APP_NAME}</title>
+    <title data-page-title={title}>{title} | {APP_NAME}</title>
   </head>
   <body class="min-h-screen bg-gray-950 text-gray-100">
     <slot />
+    <script>
+      import { initBranding } from "../lib/branding";
+      initBranding();
+    </script>
   </body>
 </html>

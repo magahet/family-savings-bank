@@ -11,10 +11,32 @@ import { APP_NAME } from "../config";
       <header class="flex items-center justify-between mb-8">
         <div>
           <h1 class="text-2xl font-bold text-emerald-400">Settings</h1>
-          <p class="text-sm text-gray-500">{APP_NAME}</p>
+          <p data-app-name class="text-sm text-gray-500">{APP_NAME}</p>
         </div>
         <a href="/" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">← Dashboard</a>
       </header>
+
+      <!-- App name -->
+      <section class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+        <h2 class="font-semibold text-lg text-gray-100 mb-1">App name</h2>
+        <p class="text-sm text-gray-500 mb-4">What this bank is called, shown in the header, the sign-in screen, and the browser tab. Changes apply everywhere immediately.</p>
+        <form id="branding-form" class="space-y-3">
+          <div>
+            <label for="app-name" class="block text-xs text-gray-500 mb-1">Name</label>
+            <input id="app-name" maxlength="60" placeholder="e.g. Schroder Bank"
+              class="w-full max-w-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label for="app-tagline" class="block text-xs text-gray-500 mb-1">Tagline</label>
+            <input id="app-tagline" maxlength="80" placeholder="e.g. Family Savings Tracker"
+              class="w-full max-w-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="submit" class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-emerald-500 transition-colors">Save</button>
+            <span id="branding-status" class="text-sm text-gray-500"></span>
+          </div>
+        </form>
+      </section>
 
       <!-- Interest rate -->
       <section class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
@@ -103,6 +125,7 @@ import { APP_NAME } from "../config";
     import { onAuthStateChanged } from "firebase/auth";
     import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, orderBy } from "firebase/firestore";
     import { httpsCallable } from "firebase/functions";
+    import { initBranding } from "../lib/branding";
 
     const el = (id: string) => document.getElementById(id)!;
     const listUsersFn = httpsCallable<unknown, { users: { uid: string; email?: string; role: string | null; disabled: boolean }[] }>(functions, "listUsers");
@@ -120,9 +143,33 @@ import { APP_NAME } from "../config";
       el("loading").classList.add("hidden");
       if (token.claims.role !== "admin") { el("denied").classList.remove("hidden"); return; }
       el("settings").classList.remove("hidden");
+      await loadBrandingForm();
       await loadRate();
       await loadUsers();
       await loadAccounts();
+    });
+
+    // ---- app name / tagline ----
+    async function loadBrandingForm() {
+      const snap = await getDoc(doc(db, "settings", "app"));
+      const d = snap.exists() ? snap.data() : {};
+      (el("app-name") as HTMLInputElement).value = (d.name as string) ?? "";
+      (el("app-tagline") as HTMLInputElement).value = (d.tagline as string) ?? "";
+    }
+    el("branding-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = el("branding-status");
+      const name = (el("app-name") as HTMLInputElement).value.trim();
+      const tagline = (el("app-tagline") as HTMLInputElement).value.trim();
+      status.textContent = "Saving…";
+      try {
+        await setDoc(doc(db, "settings", "app"), { name, tagline }, { merge: true });
+        await initBranding(); // update this page live (falls back to defaults if blank)
+        status.textContent = "Saved.";
+        setTimeout(() => (status.textContent = ""), 2000);
+      } catch (err: any) {
+        status.textContent = err?.message ?? "Could not save.";
+      }
     });
 
     // ---- interest rate ----
